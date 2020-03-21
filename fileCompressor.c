@@ -52,7 +52,9 @@ int main (int argc, char ** argv){
 int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec){
   //stores the filepath of our subdirectories
   char filePBuff[PATH_MAX + 1];
+  //in the case of recursion, update the filepath so that we do not get lost
   strcpy(filePBuff, currDirec);
+  //add a forward-slash at the end to get ready to add more to the path
   strcat(filePBuff, "/");
   //the dirent struct which holds whatever readdir returns
   struct dirent *currDir;
@@ -69,7 +71,9 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
       strcat(filePBuff, currDir->d_name);
       //traverse the new directory
       counter = direcTraverse(opendir(filePBuff), counter, currSize, filePBuff);
+      //we are back in the original file, get rid of the previous file path
       strcpy(filePBuff, currDirec);
+      //put the forward-slash back in there
       strcat(filePBuff, "/");
       //find the new max size of the array
       currSize = ((counter%100)+1)*100;
