@@ -16,6 +16,14 @@
 //prototypes
 int direcTraverse (DIR *, int, int, char *);
 
+//node struct which comprise our huffman tree
+struct node{
+  //the child on the right which is greater than parent
+  struct node * rChild;
+  //the child on the left which is lesser than parent
+  struct node * lChild;
+};
+
 //global variable which stores the names of the files from which we build the huffman codebook
 char ** files;
 
@@ -39,7 +47,7 @@ int main (int argc, char ** argv){
     exit(1);
   }
   //pass along the file directory to the traversal method which stores the files
-  direcTraverse(myDirec, 0, 100, argv[2]);
+  int finalCounter = direcTraverse(myDirec, 0, 100, argv[2]);
   //check if there is a -b flag (might not be the first argument)
   if(strcmp(argv[1],"-b") == 0){
     //we need to build the huffman codebook
