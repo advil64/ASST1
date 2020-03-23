@@ -15,17 +15,21 @@
 
 //prototypes
 int direcTraverse (DIR *, int, int, char *);
+int buildCodebook (int);
 
-//node struct which comprise our huffman tree
+//node struct which comprise our hashtable tree
 struct node{
-  //the child on the right which is greater than parent
-  struct node * rChild;
-  //the child on the left which is lesser than parent
-  struct node * lChild;
+  //pointer to the next node in the given linked list
+  struct node * next;
+  //the key (token) of the specific node
+  char * myKey;
+  //the value (frequency) of the specific node (token)
+  int frequency;
 };
 
 //global variable which stores the names of the files from which we build the huffman codebook
 char ** files;
+struct node * hashTable[256];
 
 /* The brains of the operation */
 int main (int argc, char ** argv){
@@ -51,6 +55,7 @@ int main (int argc, char ** argv){
   //check if there is a -b flag (might not be the first argument)
   if(strcmp(argv[1],"-b") == 0){
     //we need to build the huffman codebook
+    buildCodebook(finalCounter);
   }
   //we're done!
   return 0;
@@ -107,7 +112,119 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
   return counter;
 }
 
-/* given a file descriptor, builds the codebook */
-int buildCodebook (){
-return 0;
+/* iterates through the files and first gets the frequencies of the tokens */
+int buildCodebook (int filesSize){
+  //random local variables
+  int counter;
+  //loop through the files array
+  for(counter = 0; counter < filesSize; counter++){
+    //open the file at the specific index to a read only mode
+    int fd = open(files[counter], O_RDONLY);
+    //check is the given file exists
+    if(fd < 0){
+      //file does not exist it is a fatal error
+      printf("FATAL ERROR: File does not exist\n");
+      //exit the code
+      exit(1);
+    }
+    //hand the fd over to the build frequencies method to update our hash table
+    buildFrequencies(fd);
+  }
+
+  return 0;
+}
+
+/* Reads the given file and loads it into a local buffer */
+int buildFrequencies (int fileDescriptor){
+  //buffer size
+  int buffSize = 100;
+  //create the buffer to store the file
+  char *myBuffer = (char *)malloc(101*sizeof(char));
+  //check if the pointer is null
+  if(myBuffer == NULL){
+    //print an error
+    printf("ERROR: Not enough space on heap\n");
+  }
+  //set everything in the buffer to the null terminator
+  memset(myBuffer, '\0', 101);
+  //store the status of the read
+  int readIn = 0;
+  int status = 1;
+  //temp pointer to hold the dynamically sized buffer
+  char *temp;
+  //loop until everything has been read
+  while(status > 0){ 
+    //read buff size number of chars and store in myBuffer
+    do{
+      status = read(fileDescriptor, myBuffer+readIn, 100);
+      readIn += status;
+    }while(readIn < buffSize && status > 0);
+    //check if there are more chars left
+    if(status > 0){
+      //increase the array size by 100
+      buffSize += 100;
+      //store the old values in the temp pointer
+      temp = myBuffer;
+      //malloc the new array to myBuffer
+      myBuffer = (char *)malloc(buffSize*sizeof(char));
+      //check if the pointer is null
+      if(temp == NULL){
+        //print an error
+        printf("ERROR: Not enough space on heap\n");
+      }
+      //copy the old memory into the new buffer
+      memcpy(myBuffer, temp, readIn);
+      //free the old memory that was allocated
+      free(temp);
+    }
+  }
+  //we hand over the contents of our file (stored in buffer) to the table loader function
+  tableLoader(myBuffer, buffSize);
+}
+
+int tableLoader (char *buff, int buffSize){
+  //counter to loop through the buffer
+  int counter = 0;
+  //counter to loop through the cdata
+  int localcount = 0;
+  //allocate starting space into cdata
+  char *cdata = (char *)malloc(11*sizeof(char));
+  char *temp;
+  //check if the pointer is null
+  if(cdata == NULL){
+    //print an error
+    printf("ERROR: Not enough space on heap\n");
+  }
+  //set the array to be all null terminators
+  memset(cdata, '\0', 11);
+  //current size of cdata
+  int currSize = 10;
+  //loop through the string until we hit a comma or terminator
+  while(buff[counter] != ' ' && buff[counter] != '\0'){
+    //store the character in the node array
+    if(localcount == currSize){
+      //make the cdata array 10 characters bigger
+      currSize += 10;
+      //store the old values in the temp pointer
+      temp = cdata;
+      //malloc the new array to myBuffer
+      cdata = (char *)malloc(currSize*sizeof(char));
+      //check if the pointer is null
+      if(cdata == NULL){
+        //print an error
+        printf("ERROR: Not enough space on heap\n");
+      }
+      //set the random stuff to null terminators again
+      memset(cdata, '\0', currSize);
+      //copy the old memory into the new buffer
+      memcpy(cdata, temp, localcount);
+      //free the old variable
+      free(temp);
+      //store the buffer char
+      cdata[localcount] = buff[counter];
+    } else{
+      //store the buffer character into the cdata character
+      cdata[localcount] = buff[counter];
+    }
+  }
 }
