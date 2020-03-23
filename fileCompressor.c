@@ -128,14 +128,14 @@ int buildCodebook (int filesSize){
       exit(1);
     }
     //hand the fd over to the build frequencies method to update our hash table
-    buildFrequencies(fd);
+    fileReader(fd);
   }
 
   return 0;
 }
 
 /* Reads the given file and loads it into a local buffer */
-int buildFrequencies (int fileDescriptor){
+int fileReader (int fileDescriptor){
   //buffer size
   int buffSize = 100;
   //create the buffer to store the file
@@ -179,10 +179,12 @@ int buildFrequencies (int fileDescriptor){
     }
   }
   //we hand over the contents of our file (stored in buffer) to the table loader function
-  tableLoader(myBuffer, buffSize);
+  tokenizer(myBuffer, buffSize);
 }
 
-int tableLoader (char *buff, int buffSize){
+/* After reading the complete contents of a given file, we need to split the file up into tokens
+and then load each token into the table or update the token's frequency */
+int tokenizer (char *buff, int buffSize){
   //counter to loop through the buffer
   int counter = 0;
   //counter to loop through the cdata
@@ -200,9 +202,20 @@ int tableLoader (char *buff, int buffSize){
   //current size of cdata
   int currSize = 10;
   //loop through the string until we hit a comma or terminator
-  while(buff[counter] != ' ' && buff[counter] != '\0'){
+  while(buff[counter] != '\0'){
+    //check if we have hit a space
+    if(buff[counter] == ' '){
+      //isolate the token and insert it into the table
+      tableInsert(cdata);
+      //allocate a new cdata for the next token
+      cdata = (char *)malloc(11*sizeof(char));
+      //reset the local count
+      localcount = 0;
+      //reset the curr size
+      currSize = 10;
+    }
     //store the character in the node array
-    if(localcount == currSize){
+    else if(localcount == currSize){
       //make the cdata array 10 characters bigger
       currSize += 10;
       //store the old values in the temp pointer
@@ -225,6 +238,52 @@ int tableLoader (char *buff, int buffSize){
     } else{
       //store the buffer character into the cdata character
       cdata[localcount] = buff[counter];
+    }
+  }
+}
+
+/* for every token find its hash code and insert it into the table accordingly */
+int tableInsert(char *token){
+  //calculate the hash code
+  int hashCode = (int)*token;
+  //mod it to fit inside the 256 length array
+  int index = hashCode % 256;
+  //check to see if the head node of the given index is Null
+  if(hashTable[index] == NULL){
+    //create a new node and put er in there
+    struct node * newNode = (struct node *)malloc(sizeof(struct node));
+    //populate the node's values
+    newNode -> myKey = token;
+    newNode -> frequency = 1;
+    newNode -> next = NULL;
+    //gtfo
+    return 0;
+  } else{
+    //curr node to loop through the list of nodes
+    struct node * curr = hashTable[index];
+    //there already exists a headnode and we must loop through to find out token
+    while(curr != NULL){
+      //check if curr is our token
+      if(strcmp(curr -> myKey, token) == 0){
+        //update the frequency and gtfo
+        curr -> frequency++;
+        return 0;
+      } else{
+        if(curr -> next == NULL){
+          //create a new node and put er in there
+          curr -> next = (struct node *)malloc(sizeof(struct node));
+          //increment curr
+          curr = curr -> next;
+          //populate the node's values
+          curr -> myKey = token;
+          curr -> frequency = 1;
+          curr -> next = NULL;
+          //gtfo
+          return 0;
+        }
+        //increment curr
+        curr = curr -> next;
+      }
     }
   }
 }
