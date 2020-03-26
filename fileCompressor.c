@@ -82,6 +82,51 @@ int main (int argc, char ** argv){
   return 0;
 }
 
+/* pop's the minimum (root) off of the heap */
+struct node * pop(){
+  //find the node at the top
+  struct node * toPop = myHeap -> arr[0];
+  //replace the root with the lowest node
+  myHeap -> arr[0] = myHeap -> arr[myHeap -> used-1];
+  //insert the root in the correct position
+  siftDown(myHeap -> arr[0], 0);
+  //update the used space in the heap
+  myHeap -> used--;
+  //return the node that was popped
+  return toPop;
+}
+
+/*sift down the new root until it is at the correct position*/
+int siftDown(struct node * parent, int currPos){
+  //we need to sift up our latest inserted node until its in the right spot
+  struct node * rightChild = myHeap -> arr[(currPos*2)+2];
+  struct node * leftChild = myHeap -> arr[(currPos*2)+1];
+  struct node * temp;
+  //check if the parent is indeed less than the child
+  if(rightChild -> frequency < parent -> frequency){
+    //something has to be sifted, figure out what
+    if(rightChild -> frequency < leftChild -> frequency){
+      //store the parent in temp
+      temp = parent;
+      //reassign the parent
+      myHeap -> arr[currPos] = rightChild;
+      //reassign the child
+      myHeap -> arr[(currPos*2)+2] = temp;
+      //call siftup again to now check the parent
+      siftDown(rightChild, (currPos*2)+2);
+    } else if (leftChild -> frequency < parent -> frequency){
+      //store the parent in temp
+      temp = parent;
+      //reassign the parent
+      myHeap -> arr[currPos] = leftChild;
+      //reassign the child
+      myHeap -> arr[(currPos*2)+1] = temp;
+      //call siftup again to now check the parent
+      siftDown(leftChild, (currPos*2)+1);
+    }
+  }
+}
+
 /*transfers the contents of the hashTable into the heap*/
 int heapTransfer(){
   //declare counters
