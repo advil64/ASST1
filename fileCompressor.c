@@ -16,6 +16,9 @@
 //prototypes
 int direcTraverse (DIR *, int, int, char *);
 int buildCodebook (int);
+int fileReader (int);
+int tableInsert (char *);
+int tokenizer (char *, int);
 
 //node struct which comprise our hashtable tree
 struct node{
@@ -27,9 +30,20 @@ struct node{
   int frequency;
 };
 
+//heap represented as an array with its capacity
+struct heap{
+  //heap array
+  struct node **arr;
+  //current used capacity
+  int used;
+  //current capacity of the heap
+  int cap;
+};
+
 //global variable which stores the names of the files from which we build the huffman codebook
 char ** files;
 struct node * hashTable[256];
+struct heap * myHeap;
 
 /* The brains of the operation */
 int main (int argc, char ** argv){
@@ -57,8 +71,38 @@ int main (int argc, char ** argv){
     //we need to build the huffman codebook
     buildCodebook(finalCounter);
   }
+  //after building the hashtable, we need to store everything in a heap
+  myHeap = (struct heap *)malloc(sizeof(struct heap));
+  //start with an initial capacity of 100
+  myHeap -> arr = (struct node **)malloc(101*sizeof(struct node *));
+  myHeap -> cap = 100;
+  //we need to transfer the hashtable into the heap
+
   //we're done!
   return 0;
+}
+
+/*transfers the contents of the hashTable into the heap*/
+int heapTransfer(){
+  //declare counters
+  int i;
+  struct node *temp;
+  //loop through the hash table
+  for(i = 0; i < 256; i++){
+    //assign temp to the start of the table index
+    temp = hashTable[i];
+    //loop through the nodes at each index
+    while(temp != NULL){
+      //insert into the heap
+      heapInsert(temp);
+    }
+    //traverse through the linked list
+    temp = temp -> next;
+  }
+}
+
+int heapInsert(struct node * toInsert){
+
 }
 
 /* given a directory stream, traverses the directory/files and stores in the files array */
@@ -180,6 +224,8 @@ int fileReader (int fileDescriptor){
   }
   //we hand over the contents of our file (stored in buffer) to the table loader function
   tokenizer(myBuffer, buffSize);
+  //finish it
+  return 0;
 }
 
 /* After reading the complete contents of a given file, we need to split the file up into tokens
@@ -189,6 +235,7 @@ int tokenizer (char *buff, int buffSize){
   int counter = 0;
   //counter to loop through the cdata
   int localcount = 0;
+  char ctemp;
   //allocate starting space into cdata
   char *cdata = (char *)malloc(11*sizeof(char));
   char *temp;
@@ -203,8 +250,10 @@ int tokenizer (char *buff, int buffSize){
   int currSize = 10;
   //loop through the string until we hit a comma or terminator
   while(buff[counter] != '\0'){
+    ctemp = buff[counter];
     //check if we have hit a space
     if(buff[counter] == ' '){
+    
       //isolate the token and insert it into the table
       tableInsert(cdata);
       //allocate a new cdata for the next token
@@ -235,11 +284,17 @@ int tokenizer (char *buff, int buffSize){
       free(temp);
       //store the buffer char
       cdata[localcount] = buff[counter];
+      //decrement counter so that you read again
+      counter--;
     } else{
       //store the buffer character into the cdata character
       cdata[localcount] = buff[counter];
     }
+    //increment counters
+    counter++;
+    localcount++;
   }
+  return 0;
 }
 
 /* for every token find its hash code and insert it into the table accordingly */
@@ -286,4 +341,7 @@ int tableInsert(char *token){
       }
     }
   }
+  return 0;
 }
+
+/* We need to create a codebook text file  */

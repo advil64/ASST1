@@ -11,7 +11,10 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
+                "${fileDirname}/${fileBasenameNoExtension}",
+                "-Wall",
+                "-Werror",
+                "-fsanitize=address"
             ],
             "options": {
                 "cwd": "/usr/bin"
