@@ -101,8 +101,39 @@ int heapTransfer(){
   }
 }
 
-int heapInsert(struct node * toInsert){
+int increaseHeapSize(){
+  //add 100 to the current heap capacity
+}
 
+int siftUp(struct node * child, int currPos){
+  //we need to sift up our latest inserted node until its in the right spot
+  struct node * parent = myHeap -> arr[(currPos-1)/2];
+  struct node * temp;
+  //check if the parent is indeed less than the child
+  if(parent -> frequency > child -> frequency){
+    //store the parent in temp
+    temp = parent;
+    //reassign the parent
+    myHeap -> arr[(currPos-1)/2] = child;
+    //reassign the child
+    myHeap -> arr[currPos] = temp;
+    //call siftup again to now check the parent
+    siftUp(child, (currPos-1)/2);
+  }
+}
+
+int heapInsert(struct node * toInsert){
+  //check if there is space to insert the node
+  if(myHeap -> used <= myHeap -> cap){
+    //increase the heap size
+    increaseHeapSize();
+  }
+  //insert the node at the end of the array and sift up accordingly
+  myHeap -> arr[myHeap -> used] = toInsert;
+  //sift up the last node accordingly
+  siftUp(toInsert, myHeap -> used);
+  //increment the used space
+  return myHeap -> used += 1;
 }
 
 /* given a directory stream, traverses the directory/files and stores in the files array */
