@@ -22,12 +22,17 @@ int tokenizer (char *, int);
 
 //node struct which comprise our hashtable tree
 struct node{
+  //identify what type of node we are dealing with 0->parent 1->leaf
+  int identifier;
   //pointer to the next node in the given linked list
   struct node * next;
   //the key (token) of the specific node
   char * myKey;
   //the value (frequency) of the specific node (token)
   int frequency;
+  //this is the huffman parent node
+  struct node * rChild;
+  struct node * lChild;
 };
 
 //heap represented as an array with its capacity
@@ -44,6 +49,7 @@ struct heap{
 char ** files;
 struct node * hashTable[256];
 struct heap * myHeap;
+struct node * huffHead;
 
 /* The brains of the operation */
 int main (int argc, char ** argv){
@@ -77,9 +83,40 @@ int main (int argc, char ** argv){
   myHeap -> arr = (struct node **)malloc(101*sizeof(struct node *));
   myHeap -> cap = 100;
   //we need to transfer the hashtable into the heap
-
+  heapTransfer();
+  //now we need to start building the Huffman Tree
+  buildSubTrees();
   //we're done!
   return 0;
+}
+
+/*Start building the Subtrees Tree*/
+int buildSubTrees(){
+  //have a temp node to store the pops
+  struct node * temp1 = NULL;
+  struct node * temp2 = NULL;
+  struct node * parent = NULL;
+  //loop through the original minheap
+  while(myHeap -> used > 1){
+    //check the roots of both heaps
+    temp1 = pop();
+    temp2 = pop();
+    //make the next nodes null
+    temp1 -> next = NULL;
+    temp2 -> next = NULL;
+    //allocate space for a parent node
+    parent = (struct node *)malloc(sizeof(struct node));
+    //initialize the values in the parent
+    parent -> identifier = 0;
+    parent -> frequency = temp1 -> frequency + temp2 -> frequency;
+    //put the parent back into the heap
+    heapInsert(parent);
+  }
+  //assign huffhead to hold the head of the tree
+  huffHead = myHeap -> arr[0];
+  //get rid of the heap
+  free(myHeap -> arr);
+  free(myHeap);
 }
 
 /* pop's the minimum (root) off of the heap */
