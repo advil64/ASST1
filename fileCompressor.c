@@ -86,7 +86,49 @@ int main (int argc, char ** argv){
   heapTransfer();
   //now we need to start building the Huffman Tree
   buildSubTrees();
+  //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
+  int codFD = open("./HuffmanCodebook", O_CREAT);
+  //write the escape character being used
+  write(codFD, "\ \n", 3);
+  depthFirstSearch(codFD, 0);
   //we're done!
+  return 0;
+}
+
+/* writes the codes to a codebook file */
+int depthFirstSearch(int fd, char * path){
+  //create a local copy of the path
+  char * localPath = (char *)malloc(strlen(path));
+  strcpy(localPath, path);
+  //check to see if the node has children
+  if(!huffHead->lChild && !huffHead->rChild){
+    //if not, we have hit a leaf node
+    write(fd, path, strlen(path));
+    write(fd, "\t", 1);
+    write(fd, huffHead -> myKey, strlen(huffHead -> myKey));
+    //return success
+    return 0;
+  } else{
+    //otherwise we go down the path
+    if(huffHead->rChild){
+      //add a 1 to the path
+      strcat(path, "1");
+      //go down the right child
+      depthFirstSearch(fd, path);
+    }
+    //go down the leftside
+    if(huffHead->lChild){
+      //reset the path
+      strcpy(path, localPath);
+      //add a 0 to the path
+      strcat(path, "0");
+      //go down the left child
+      depthFirstSearch(fd, path);
+    }
+  }
+  //free the localpath before leaving
+  free(localPath);
+  //return success
   return 0;
 }
 
@@ -117,6 +159,8 @@ int buildSubTrees(){
   //get rid of the heap
   free(myHeap -> arr);
   free(myHeap);
+  //return success
+  return 0;
 }
 
 /* pop's the minimum (root) off of the heap */
