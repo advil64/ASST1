@@ -27,6 +27,7 @@ int heapTransfer();
 int increaseHeapSize();
 int siftUp(struct node *, int);
 int heapInsert(struct node *);
+void printHeap();
 
 //node struct which comprise our hashtable tree
 struct node{
@@ -61,14 +62,8 @@ struct node * huffHead;
 
 /* The brains of the operation */
 int main (int argc, char ** argv){
-
-  /* TODO: How do I check if we must do our command recursively? 
-  Can there be multiple flags given in the command line?
-  */
-
   //make space in the files array
   files = (char **) malloc(100 * sizeof(char *));
-
   //open the directory stream
   DIR *myDirec = opendir(argv[3]);
   //check is the given file exists
@@ -224,15 +219,18 @@ int heapTransfer(){
   struct node *temp;
   //loop through the hash table
   for(i = 0; i < 256; i++){
-    //assign temp to the start of the table index
-    temp = hashTable[i];
-    //loop through the nodes at each index
-    while(temp != NULL){
-      //insert into the heap
-      heapInsert(temp);
+    //check that the start at index i is not null
+    if(hashTable[i]){
+      //assign temp to the start of the table index
+      temp = hashTable[i];
+      //loop through the nodes at each index
+      while(temp != NULL){
+        //insert into the heap
+        heapInsert(temp);
+        //traverse through the linked list
+        temp = temp -> next;
+      }
     }
-    //traverse through the linked list
-    temp = temp -> next;
   }
   //return the number of transferrences
   return i;
@@ -267,18 +265,32 @@ int siftUp(struct node * child, int currPos){
   return (currPos-1)/2;
 }
 
+/*print heap function (purely for testing)*/
+void printHeap(){
+  //counter
+  int k = 0;
+  //loop through the heap used
+  for(k = 0; k < myHeap -> used; k++){
+    printf("%s %d %d \n",myHeap -> arr[k] -> myKey, myHeap -> arr[k] -> identifier, myHeap -> arr[k] -> frequency);
+  } 
+  printf("\n");
+}
+
 int heapInsert(struct node * toInsert){
   //check if there is space to insert the node
-  if(myHeap -> used <= myHeap -> cap){
+  if(myHeap -> used >= myHeap -> cap){
     //increase the heap size
     increaseHeapSize();
   }
   //insert the node at the end of the array and sift up accordingly
   myHeap -> arr[myHeap -> used] = toInsert;
+  //increment the used space
+  myHeap -> used++;
   //sift up the last node accordingly
   siftUp(toInsert, myHeap -> used);
+  printHeap();
   //increment the used space
-  return myHeap -> used += 1;
+  return myHeap -> used;
 }
 
 /* given a directory stream, traverses the directory/files and stores in the files array */
@@ -336,8 +348,11 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
 int buildCodebook (int filesSize){
   //random local variables
   int counter;
+  char * temp;
   //loop through the files array
   for(counter = 0; counter < filesSize; counter++){
+    //check out the working file path
+    temp = files[counter];
     //open the file at the specific index to a read only mode
     int fd = open(files[counter], O_RDONLY);
     //check is the given file exists
@@ -428,45 +443,38 @@ int tokenizer (char *buff, int buffSize){
   while(buff[counter] != '\0'){
     ctemp = buff[counter];
     //check if we have hit a space
-    if(buff[counter] == '\t'){
-      //isolate the token and insert it into the table
-      tableInsert(cdata);
-      //allocate a new cdata for the next token
-      cdata = (char *)malloc(11*sizeof(char));
-      //set the array to be all null terminators
-      memset(cdata, '\0', 11);
+    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n' || ctemp == ',' || ctemp == '.'){
+      //we don't need to store empty tokens
+      if(strcmp(cdata, "") != 0){
+        //isolate the token and insert it into the table
+        tableInsert(cdata);
+        //allocate a new cdata for the next token
+        cdata = (char *)malloc(11*sizeof(char));
+        //set the array to be all null terminators
+        memset(cdata, '\0', 11);
+        //reset the curr size
+        currSize = 10;
+      }
       //reset the local count
       localcount = -1;
-      //reset the curr size
-      currSize = 10;
-      //also insert the tab character
-      tableInsert("\t");
-    } else if(buff[counter] == ' '){
-      //isolate the token and insert it into the table
-      tableInsert(cdata);
-      //allocate a new cdata for the next token
-      cdata = (char *)malloc(11*sizeof(char));
-      //set the array to be all null terminators
-      memset(cdata, '\0', 11);
-      //reset the local count
-      localcount = -1;
-      //reset the curr size
-      currSize = 10;
-      //also insert the tab character
-      tableInsert(" ");
-    }else if(buff[counter] == '\n'){
-      //isolate the token and insert it into the table
-      tableInsert(cdata);
-      //allocate a new cdata for the next token
-      cdata = (char *)malloc(11*sizeof(char));
-      //set the array to be all null terminators
-      memset(cdata, '\0', 11);
-      //reset the local count
-      localcount = -1;
-      //reset the curr size
-      currSize = 10;
-      //also insert the tab character
-      tableInsert("\n");
+      //also insert the special terminator character
+      switch(ctemp){
+        case '\t':
+          tableInsert("\t");
+          break;
+        case ' ':
+          tableInsert(" ");
+          break;
+        case '\n':
+          tableInsert("\n");
+          break;
+        case ',':
+          tableInsert(",");
+          break;
+        case '.':
+          tableInsert(".");
+          break;
+      }
     }
     //store the character in the node array
     else if(localcount == currSize){
@@ -489,8 +497,6 @@ int tokenizer (char *buff, int buffSize){
       free(temp);
       //store the buffer char
       cdata[localcount] = buff[counter];
-      //decrement counter so that you read again
-      counter--;
     } else{
       //store the buffer character into the cdata character
       cdata[localcount] = buff[counter];
@@ -504,10 +510,16 @@ int tokenizer (char *buff, int buffSize){
 
 /* for every token find its hash code and insert it into the table accordingly */
 int tableInsert(char *token){
+
   //calculate the hash code
-  int hashCode = (int)*token;
+  int sum = 0;
+  //loop through the characters of the token
+  for (int k = 0; k < strlen(token); k++){
+    //calculate the ascii sum of the token
+    sum = sum + (int)token[k];
+  }
   //mod it to fit inside the 256 length array
-  int index = hashCode % 256;
+  int index = sum % 256;
   //check to see if the head node of the given index is Null
   if(hashTable[index] == NULL){
     //create a new node and put er in there
@@ -519,6 +531,8 @@ int tableInsert(char *token){
     newNode -> next = NULL;
     newNode -> rChild = NULL;
     newNode -> lChild = NULL;
+    //store the newly created node in the table
+    hashTable[index] = newNode;
     //gtfo
     return 0;
   } else{
