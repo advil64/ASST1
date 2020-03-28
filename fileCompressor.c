@@ -19,6 +19,14 @@ int buildCodebook (int);
 int fileReader (int);
 int tableInsert (char *);
 int tokenizer (char *, int);
+int depthFirstSearch(int, char *);
+int buildSubTrees();
+struct node * pop();
+int siftDown(struct node *, int);
+int heapTransfer();
+int increaseHeapSize();
+int siftUp(struct node *, int);
+int heapInsert(struct node *);
 
 //node struct which comprise our hashtable tree
 struct node{
@@ -62,35 +70,35 @@ int main (int argc, char ** argv){
   files = (char **) malloc(100 * sizeof(char *));
 
   //open the directory stream
-  DIR *myDirec = opendir(argv[2]);
+  DIR *myDirec = opendir(argv[3]);
   //check is the given file exists
-  if(myDirec < 0){
+  if(!myDirec){
     //file does not exist it is a fatal error
     printf("FATAL ERROR: File does not exist\n");
     //exit the code
     exit(1);
   }
   //pass along the file directory to the traversal method which stores the files
-  int finalCounter = direcTraverse(myDirec, 0, 100, argv[2]);
+  int finalCounter = direcTraverse(myDirec, 0, 100, argv[3]);
   //check if there is a -b flag (might not be the first argument)
-  if(strcmp(argv[1],"-b") == 0){
+  if(strcmp(argv[2],"-b") == 0){
     //we need to build the huffman codebook
     buildCodebook(finalCounter);
+    //after building the hashtable, we need to store everything in a heap
+    myHeap = (struct heap *)malloc(sizeof(struct heap));
+    //start with an initial capacity of 100
+    myHeap -> arr = (struct node **)malloc(101*sizeof(struct node *));
+    myHeap -> cap = 100;
+    //we need to transfer the hashtable into the heap
+    heapTransfer();
+    //now we need to start building the Huffman Tree
+    buildSubTrees();
+    //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
+    int codFD = open("./HuffmanCodebook", O_CREAT);
+    //write the escape character being used
+    write(codFD, "$ \n", 3);
+    depthFirstSearch(codFD, 0);
   }
-  //after building the hashtable, we need to store everything in a heap
-  myHeap = (struct heap *)malloc(sizeof(struct heap));
-  //start with an initial capacity of 100
-  myHeap -> arr = (struct node **)malloc(101*sizeof(struct node *));
-  myHeap -> cap = 100;
-  //we need to transfer the hashtable into the heap
-  heapTransfer();
-  //now we need to start building the Huffman Tree
-  buildSubTrees();
-  //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
-  int codFD = open("./HuffmanCodebook", O_CREAT);
-  //write the escape character being used
-  write(codFD, "\ \n", 3);
-  depthFirstSearch(codFD, 0);
   //we're done!
   return 0;
 }
@@ -206,6 +214,7 @@ int siftDown(struct node * parent, int currPos){
       siftDown(leftChild, (currPos*2)+1);
     }
   }
+  return 0;
 }
 
 /*transfers the contents of the hashTable into the heap*/
@@ -225,10 +234,18 @@ int heapTransfer(){
     //traverse through the linked list
     temp = temp -> next;
   }
+  //return the number of transferrences
+  return i;
 }
 
+/*increases the heap array size by 100*/
 int increaseHeapSize(){
   //add 100 to the current heap capacity
+  myHeap -> arr = realloc(myHeap -> arr, ((myHeap -> cap)+100)*sizeof(struct node *));
+  //increase the capacity by 100
+  myHeap -> cap += 100;
+  //return the new capacity
+  return myHeap -> cap;
 }
 
 int siftUp(struct node * child, int currPos){
@@ -246,6 +263,8 @@ int siftUp(struct node * child, int currPos){
     //call siftup again to now check the parent
     siftUp(child, (currPos-1)/2);
   }
+  //return the new position
+  return (currPos-1)/2;
 }
 
 int heapInsert(struct node * toInsert){
@@ -274,8 +293,8 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
   struct dirent *currDir;
   //loop through the contents of the directory and store in files array
   while((currDir = readdir(myDirectory)) != NULL){
-    //skip the . and ..
-    if(strcmp(currDir->d_name, ".") == 0 || strcmp(currDir->d_name, "..") == 0){
+    //skip the . and .. and dsstore file
+    if(strcmp(currDir->d_name, ".") == 0 || strcmp(currDir->d_name, "..") == 0 || strcmp(currDir->d_name,".DS_Store") == 0){
       //skip the iteration
       continue;
     }
@@ -313,7 +332,7 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
   return counter;
 }
 
-/* iterates through the files and first gets the frequencies of the tokens */
+/* iterates through the files and first calls file reader on each file */
 int buildCodebook (int filesSize){
   //random local variables
   int counter;
@@ -409,16 +428,45 @@ int tokenizer (char *buff, int buffSize){
   while(buff[counter] != '\0'){
     ctemp = buff[counter];
     //check if we have hit a space
-    if(buff[counter] == ' '){
-    
+    if(buff[counter] == '\t'){
       //isolate the token and insert it into the table
       tableInsert(cdata);
       //allocate a new cdata for the next token
       cdata = (char *)malloc(11*sizeof(char));
+      //set the array to be all null terminators
+      memset(cdata, '\0', 11);
       //reset the local count
-      localcount = 0;
+      localcount = -1;
       //reset the curr size
       currSize = 10;
+      //also insert the tab character
+      tableInsert("\t");
+    } else if(buff[counter] == ' '){
+      //isolate the token and insert it into the table
+      tableInsert(cdata);
+      //allocate a new cdata for the next token
+      cdata = (char *)malloc(11*sizeof(char));
+      //set the array to be all null terminators
+      memset(cdata, '\0', 11);
+      //reset the local count
+      localcount = -1;
+      //reset the curr size
+      currSize = 10;
+      //also insert the tab character
+      tableInsert(" ");
+    }else if(buff[counter] == '\n'){
+      //isolate the token and insert it into the table
+      tableInsert(cdata);
+      //allocate a new cdata for the next token
+      cdata = (char *)malloc(11*sizeof(char));
+      //set the array to be all null terminators
+      memset(cdata, '\0', 11);
+      //reset the local count
+      localcount = -1;
+      //reset the curr size
+      currSize = 10;
+      //also insert the tab character
+      tableInsert("\n");
     }
     //store the character in the node array
     else if(localcount == currSize){
@@ -465,9 +513,12 @@ int tableInsert(char *token){
     //create a new node and put er in there
     struct node * newNode = (struct node *)malloc(sizeof(struct node));
     //populate the node's values
+    newNode -> identifier = 1;
     newNode -> myKey = token;
     newNode -> frequency = 1;
     newNode -> next = NULL;
+    newNode -> rChild = NULL;
+    newNode -> lChild = NULL;
     //gtfo
     return 0;
   } else{
@@ -500,5 +551,3 @@ int tableInsert(char *token){
   }
   return 0;
 }
-
-/* We need to create a codebook text file  */
