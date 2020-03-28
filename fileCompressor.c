@@ -92,7 +92,7 @@ int main (int argc, char ** argv){
     int codFD = open("./HuffmanCodebook", O_CREAT);
     //write the escape character being used
     write(codFD, "$ \n", 3);
-    depthFirstSearch(codFD, 0);
+    depthFirstSearch(codFD, "0");
   }
   //we're done!
   return 0;
@@ -101,7 +101,7 @@ int main (int argc, char ** argv){
 /* writes the codes to a codebook file */
 int depthFirstSearch(int fd, char * path){
   //create a local copy of the path
-  char * localPath = (char *)malloc(strlen(path));
+  char localPath[PATH_MAX];
   strcpy(localPath, path);
   //check to see if the node has children
   if(!huffHead->lChild && !huffHead->rChild){
@@ -115,18 +115,18 @@ int depthFirstSearch(int fd, char * path){
     //otherwise we go down the path
     if(huffHead->rChild){
       //add a 1 to the path
-      strcat(path, "1");
+      strncat(localPath, "1", 1);
       //go down the right child
-      depthFirstSearch(fd, path);
+      depthFirstSearch(fd, localPath);
     }
     //go down the leftside
     if(huffHead->lChild){
       //reset the path
-      strcpy(path, localPath);
+      strcpy(localPath, path);
       //add a 0 to the path
-      strcat(path, "0");
+      strncat(localPath, "0", 1);
       //go down the left child
-      depthFirstSearch(fd, path);
+      depthFirstSearch(fd, localPath);
     }
   }
   //free the localpath before leaving
@@ -153,7 +153,12 @@ int buildSubTrees(){
     parent = (struct node *)malloc(sizeof(struct node));
     //initialize the values in the parent
     parent -> identifier = 0;
+    parent -> myKey = NULL;
+    parent -> next = NULL;
     parent -> frequency = temp1 -> frequency + temp2 -> frequency;
+    //assign the right and left children of the parent
+    parent -> lChild = temp1;
+    parent -> rChild = temp2;
     //put the parent back into the heap
     heapInsert(parent);
   }
@@ -284,11 +289,11 @@ int heapInsert(struct node * toInsert){
   }
   //insert the node at the end of the array and sift up accordingly
   myHeap -> arr[myHeap -> used] = toInsert;
-  //increment the used space
-  myHeap -> used++;
   //sift up the last node accordingly
   siftUp(toInsert, myHeap -> used);
-  printHeap();
+  //increment the used space
+  myHeap -> used++;
+  //printHeap();
   //increment the used space
   return myHeap -> used;
 }
@@ -330,7 +335,7 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
       //store the names of the files in our files array
       strcat(files[counter], currDir->d_name);
       //just to test the code
-      printf("%s\n", files[counter]);
+      //printf("%s\n", files[counter]);
       //check if files array needs more space
       if(++counter >= currSize){
         //realloc 100 more spaces in our files array
@@ -443,7 +448,7 @@ int tokenizer (char *buff, int buffSize){
   while(buff[counter] != '\0'){
     ctemp = buff[counter];
     //check if we have hit a space
-    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n' || ctemp == ',' || ctemp == '.'){
+    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n' || ctemp == ',' || ctemp == '.' || ctemp == '"'){
       //we don't need to store empty tokens
       if(strcmp(cdata, "") != 0){
         //isolate the token and insert it into the table
@@ -473,6 +478,9 @@ int tokenizer (char *buff, int buffSize){
           break;
         case '.':
           tableInsert(".");
+          break;
+        case '"':
+          tableInsert("\"");
           break;
       }
     }
