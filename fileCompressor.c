@@ -13,23 +13,6 @@
 #define TRUE 1
 #define FALSE 0
 
-//prototypes
-int direcTraverse (DIR *, int, int, char *);
-int buildCodebook (int);
-int fileReader (int);
-int tableInsert (char *);
-int tokenizer (char *, int);
-int depthFirstSearch(int, char *);
-int buildSubTrees();
-struct node * pop();
-int siftDown(struct node *, int);
-int heapTransfer();
-int increaseHeapSize();
-int siftUp(struct node *, int);
-int heapInsert(struct node *);
-void printHeap();
-int printTable();
-
 //node struct which comprise our hashtable tree
 struct node{
   //identify what type of node we are dealing with 0->parent 1->leaf
@@ -44,6 +27,23 @@ struct node{
   struct node * rChild;
   struct node * lChild;
 };
+
+//prototypes
+int direcTraverse (DIR *, int, int, char *);
+int buildCodebook (int);
+int fileReader (int);
+int tableInsert (char *);
+int tokenizer (char *, int);
+int buildSubTrees();
+struct node * pop();
+int siftDown(struct node *, int);
+int heapTransfer();
+int increaseHeapSize();
+int siftUp(struct node *, int);
+int heapInsert(struct node *);
+void printHeap();
+int printTable();
+int depthFirstSearch(struct node *, int, char *);
 
 //heap represented as an array with its capacity
 struct heap{
@@ -89,6 +89,13 @@ int main (int argc, char ** argv){
       if(recursive){
         //make space in the files array
         files = (char **) malloc(100 * sizeof(char *));
+        //check is the given file exists
+        if(!files){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: Not enough memory\n");
+          //exit the code
+          exit(1);
+        }
         //open the directory stream
         DIR *myDirec = opendir(argv[i]);
         //check is the given file exists
@@ -107,27 +114,43 @@ int main (int argc, char ** argv){
       } else{
         //only make space for one file path
         files = (char **) malloc(1 * sizeof(char *));
+        //check is the given file exists
+        if(!files){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: Not enough memory\n");
+          //exit the code
+          exit(1);
+        }
         //the only file
         files[0] = argv[i];
         //we need to build the huffman codebook
         buildCodebook(1);
       }
       //TODO: delete this in final iteration of project
-      printTable();
+      //printTable();
       //after building the hashtable, we need to store everything in a heap
       myHeap = (struct heap *)malloc(sizeof(struct heap));
       //start with an initial capacity of 100
       myHeap -> arr = (struct node **)malloc(101*sizeof(struct node *));
       myHeap -> cap = 100;
+      memset(myHeap -> arr, 0x0, (myHeap -> cap)*sizeof(struct node *));
+      myHeap -> used = 0;
       //we need to transfer the hashtable into the heap
       heapTransfer();
+      //TODO: remove this before submission
+      printHeap();
       //now we need to start building the Huffman Tree
       buildSubTrees();
+      //TODO: remove this before submission
+      //printHeap();
       //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
-      int codFD = open("./HuffmanCodebook", O_CREAT);
+      int codFD = open("HuffmanCodebook", O_RDWR | O_CREAT);
       //write the escape character being used
       write(codFD, "$ \n", 3);
-      depthFirstSearch(codFD, "0");
+      //call the DFS to calculate the huffman codes
+      depthFirstSearch(huffHead, codFD, "");
+      //close the file descriptor once we're done writing
+      close(codFD);
     }
   }
   //we're done!
@@ -135,38 +158,43 @@ int main (int argc, char ** argv){
 }
 
 /* writes the codes to a codebook file */
-int depthFirstSearch(int fd, char * path){
+int depthFirstSearch(struct node * curr, int fd, char * path){
   //create a local copy of the path
   char localPath[PATH_MAX];
   strcpy(localPath, path);
+  //for some reason if curr is null, gtfo
+  if(curr == NULL){
+    return 0;
+  }
   //check to see if the node has children
-  if(!huffHead->lChild && !huffHead->rChild){
+  if(curr->identifier == 1){
     //if not, we have hit a leaf node
     write(fd, path, strlen(path));
     write(fd, "\t", 1);
-    write(fd, huffHead -> myKey, strlen(huffHead -> myKey));
+    write(fd, curr -> myKey, strlen(curr -> myKey));
+    write(fd, "\n", 1);
     //return success
     return 0;
   } else{
     //otherwise we go down the path
-    if(huffHead->rChild){
+    if(curr->rChild){
+      //copy the path
+      strcpy(localPath, path);
       //add a 1 to the path
       strncat(localPath, "1", 1);
       //go down the right child
-      depthFirstSearch(fd, localPath);
+      depthFirstSearch(curr->rChild, fd, localPath);
     }
     //go down the leftside
-    if(huffHead->lChild){
+    if(curr->lChild){
       //reset the path
       strcpy(localPath, path);
       //add a 0 to the path
       strncat(localPath, "0", 1);
       //go down the left child
-      depthFirstSearch(fd, localPath);
+      depthFirstSearch(curr->lChild, fd, localPath);
     }
   }
-  //free the localpath before leaving
-  free(localPath);
   //return success
   return 0;
 }
@@ -213,24 +241,34 @@ struct node * pop(){
   struct node * toPop = myHeap -> arr[0];
   //replace the root with the lowest node
   myHeap -> arr[0] = myHeap -> arr[myHeap -> used-1];
-  //insert the root in the correct position
-  siftDown(myHeap -> arr[0], 0);
+  //make the last node null now that you've moved it
+  myHeap -> arr[myHeap -> used-1] = NULL;
   //update the used space in the heap
   myHeap -> used--;
+  //insert the root in the correct position
+  siftDown(myHeap -> arr[0], 0);
   //return the node that was popped
   return toPop;
 }
 
 /*sift down the new root until it is at the correct position*/
 int siftDown(struct node * parent, int currPos){
+  //calculate the potential positions
+  int rPos = (currPos*2)+2;
+  int lPos = (currPos*2)+1;
+  //check if we are at the end of the heap
+  if(rPos > myHeap -> cap || lPos > myHeap -> cap){
+    //increase the heap size, this is unlikely tho
+    increaseHeapSize();
+  }
   //we need to sift up our latest inserted node until its in the right spot
-  struct node * rightChild = myHeap -> arr[(currPos*2)+2];
-  struct node * leftChild = myHeap -> arr[(currPos*2)+1];
+  struct node * rightChild = myHeap -> arr[rPos];
+  struct node * leftChild = myHeap -> arr[lPos];
   struct node * temp;
   //check if the parent is indeed less than the child
-  if(rightChild -> frequency < parent -> frequency){
+  if(rightChild && rightChild -> frequency < parent -> frequency){
     //something has to be sifted, figure out what
-    if(rightChild -> frequency < leftChild -> frequency){
+    if(rightChild -> frequency <= leftChild -> frequency){
       //store the parent in temp
       temp = parent;
       //reassign the parent
@@ -239,7 +277,7 @@ int siftDown(struct node * parent, int currPos){
       myHeap -> arr[(currPos*2)+2] = temp;
       //call siftup again to now check the parent
       siftDown(rightChild, (currPos*2)+2);
-    } else if (leftChild -> frequency < parent -> frequency){
+    } else if (leftChild && leftChild -> frequency < parent -> frequency){
       //store the parent in temp
       temp = parent;
       //reassign the parent
@@ -250,7 +288,7 @@ int siftDown(struct node * parent, int currPos){
       siftDown(leftChild, (currPos*2)+1);
     }
   }
-  return 0;
+  return currPos;
 }
 
 /*transfers the contents of the hashTable into the heap*/
@@ -279,8 +317,14 @@ int heapTransfer(){
 
 /*increases the heap array size by 100*/
 int increaseHeapSize(){
-  //add 100 to the current heap capacity
-  myHeap -> arr = realloc(myHeap -> arr, ((myHeap -> cap)+100)*sizeof(struct node *));
+  //first store the old array in a temp
+  struct node ** temp = myHeap -> arr;
+  //then mallocate a new array
+  myHeap -> arr = malloc(((myHeap -> cap)+100)*sizeof(struct node *));
+  //set the memory to all zeros
+  memset(myHeap -> arr, 0x0, (myHeap -> cap+100)*sizeof(struct node *));
+  //copy the temp back into the main memory
+  memcpy(myHeap -> arr, temp, (myHeap -> cap)*sizeof(struct node *));
   //increase the capacity by 100
   myHeap -> cap += 100;
   //return the new capacity
@@ -288,6 +332,13 @@ int increaseHeapSize(){
 }
 
 int siftUp(struct node * child, int currPos){
+  //calculate the potential position of the parent
+  int parentPos = (currPos-1)/2;
+  //check if the parent position is less than 0 or if both curr and parent are zero
+  if(parentPos == 0 && currPos == 0){
+    //we have gone as high as we could have
+    return 0;
+  }
   //we need to sift up our latest inserted node until its in the right spot
   struct node * parent = myHeap -> arr[(currPos-1)/2];
   struct node * temp;
@@ -310,11 +361,19 @@ int siftUp(struct node * child, int currPos){
 void printHeap(){
   //counter
   int k = 0;
+  int myfd = open("tableContents.txt", O_WRONLY);
+  char snum[15];
   //loop through the heap used
   for(k = 0; k < myHeap -> used; k++){
-    printf("%s %d %d \n",myHeap -> arr[k] -> myKey, myHeap -> arr[k] -> identifier, myHeap -> arr[k] -> frequency);
+    sprintf(snum,"%d" ,myHeap -> arr[k] -> frequency);
+    write(myfd, myHeap -> arr[k] -> myKey, strlen(myHeap -> arr[k] -> myKey));
+    write(myfd, "\t", 1);
+    write(myfd, snum, strlen(snum));
+    write(myfd, "\n", 1);
+    //printf("%s %d %d \n",myHeap -> arr[k] -> myKey, myHeap -> arr[k] -> identifier, myHeap -> arr[k] -> frequency);
   } 
   printf("\n");
+  close(myfd);
 }
 
 int heapInsert(struct node * toInsert){
@@ -376,6 +435,13 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
       if(++counter >= currSize){
         //realloc 100 more spaces in our files array
         files = realloc(files, (currSize+100) * sizeof(char *));
+        //check is the given file exists
+        if(!files){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: Not enough memory\n");
+          //exit the code
+          exit(1);
+        }
         //change the curr size accordingly
         currSize += 100;
       }
@@ -600,9 +666,12 @@ int tableInsert(char *token){
           //increment curr
           curr = curr -> next;
           //populate the node's values
+          curr -> identifier = 1;
           curr -> myKey = token;
           curr -> frequency = 1;
           curr -> next = NULL;
+          curr -> rChild = NULL;
+          curr -> lChild = NULL;
           //gtfo
           return 0;
         }
