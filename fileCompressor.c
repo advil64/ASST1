@@ -28,6 +28,7 @@ int increaseHeapSize();
 int siftUp(struct node *, int);
 int heapInsert(struct node *);
 void printHeap();
+int printTable();
 
 //node struct which comprise our hashtable tree
 struct node{
@@ -62,37 +63,72 @@ struct node * huffHead;
 
 /* The brains of the operation */
 int main (int argc, char ** argv){
-  //make space in the files array
-  files = (char **) malloc(100 * sizeof(char *));
-  //open the directory stream
-  DIR *myDirec = opendir(argv[3]);
-  //check is the given file exists
-  if(!myDirec){
-    //file does not exist it is a fatal error
-    printf("FATAL ERROR: File does not exist\n");
-    //exit the code
-    exit(1);
-  }
-  //pass along the file directory to the traversal method which stores the files
-  int finalCounter = direcTraverse(myDirec, 0, 100, argv[3]);
-  //check if there is a -b flag (might not be the first argument)
-  if(strcmp(argv[2],"-b") == 0){
-    //we need to build the huffman codebook
-    buildCodebook(finalCounter);
-    //after building the hashtable, we need to store everything in a heap
-    myHeap = (struct heap *)malloc(sizeof(struct heap));
-    //start with an initial capacity of 100
-    myHeap -> arr = (struct node **)malloc(101*sizeof(struct node *));
-    myHeap -> cap = 100;
-    //we need to transfer the hashtable into the heap
-    heapTransfer();
-    //now we need to start building the Huffman Tree
-    buildSubTrees();
-    //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
-    int codFD = open("./HuffmanCodebook", O_CREAT);
-    //write the escape character being used
-    write(codFD, "$ \n", 3);
-    depthFirstSearch(codFD, "0");
+
+  //booleans indicating flags
+  int build = 0;
+  int recursive = 0;
+  int compress = 0;
+  int decompress = 0;
+  //counter for the loop
+  int i = 0;
+  //loop through the arguments
+  for(i = 0; i < argc; i++){
+    if(strcmp(argv[i], "-b") == 0){
+      //set the build flag to be true
+      build = 1;
+    } else if(strcmp(argv[i], "-R") == 0){
+      //set the recursive flag to be true
+      recursive = 1;
+    } else if(strcmp(argv[i], "-c") == 0){
+      //we need to compress the given file
+      compress = 1;
+    } else if(strcmp(argv[i], "-d") == 0){
+      //we need to decompress the given file
+      decompress = 1;
+    } else if(build){
+      if(recursive){
+        //make space in the files array
+        files = (char **) malloc(100 * sizeof(char *));
+        //open the directory stream
+        DIR *myDirec = opendir(argv[i]);
+        //check is the given file exists
+        if(!myDirec){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: File does not exist\n");
+          //exit the code
+          exit(1);
+        }
+        //pass along the file directory to the traversal method which stores the files
+        int fileCounter = direcTraverse(myDirec, 0, 100, argv[i]);
+        //we need to build the huffman codebook
+        buildCodebook(fileCounter);
+        //close the directory
+        closedir(myDirec);
+      } else{
+        //only make space for one file path
+        files = (char **) malloc(1 * sizeof(char *));
+        //the only file
+        files[0] = argv[i];
+        //we need to build the huffman codebook
+        buildCodebook(1);
+      }
+      //TODO: delete this in final iteration of project
+      printTable();
+      //after building the hashtable, we need to store everything in a heap
+      myHeap = (struct heap *)malloc(sizeof(struct heap));
+      //start with an initial capacity of 100
+      myHeap -> arr = (struct node **)malloc(101*sizeof(struct node *));
+      myHeap -> cap = 100;
+      //we need to transfer the hashtable into the heap
+      heapTransfer();
+      //now we need to start building the Huffman Tree
+      buildSubTrees();
+      //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
+      int codFD = open("./HuffmanCodebook", O_CREAT);
+      //write the escape character being used
+      write(codFD, "$ \n", 3);
+      depthFirstSearch(codFD, "0");
+    }
   }
   //we're done!
   return 0;
@@ -369,6 +405,8 @@ int buildCodebook (int filesSize){
     }
     //hand the fd over to the build frequencies method to update our hash table
     fileReader(fd);
+    //close the file descriptor once you are done with it
+    close(fd);
   }
 
   return 0;
@@ -418,6 +456,8 @@ int fileReader (int fileDescriptor){
       free(temp);
     }
   }
+  //TODO: delete, this is only for testing purposes
+  //printf("%s", myBuffer);
   //we hand over the contents of our file (stored in buffer) to the table loader function
   tokenizer(myBuffer, buffSize);
   //finish it
@@ -465,13 +505,13 @@ int tokenizer (char *buff, int buffSize){
       //also insert the special terminator character
       switch(ctemp){
         case '\t':
-          tableInsert("\t");
+          tableInsert("$\t");
           break;
         case ' ':
-          tableInsert(" ");
+          tableInsert("$ ");
           break;
         case '\n':
-          tableInsert("\n");
+          tableInsert("$\n");
           break;
         case ',':
           tableInsert(",");
@@ -571,5 +611,34 @@ int tableInsert(char *token){
       }
     }
   }
+  return 0;
+}
+
+/*print the table only to check the frequencies of everything*/
+int printTable(){
+  //declare counters
+  int i;
+  struct node *temp;
+  int myfd = open("tableContents.txt", O_WRONLY);
+  char snum[15];
+  //loop through the hash table
+  for(i = 0; i < 256; i++){
+    //check that the start at index i is not null
+    if(hashTable[i]){
+      //assign temp to the start of the table index
+      temp = hashTable[i];
+      //loop through the nodes at each index
+      while(temp != NULL){
+        sprintf(snum,"%d" ,temp -> frequency);
+        write(myfd, temp -> myKey, strlen(temp -> myKey));
+        write(myfd, "\t", 1);
+        write(myfd, snum, strlen(snum));
+        write(myfd, "\n", 1);
+        //traverse
+        temp = temp -> next;
+      }
+    }
+  }
+  close(myfd);
   return 0;
 }
