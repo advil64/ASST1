@@ -277,6 +277,15 @@ int siftDown(struct node * parent, int currPos){
       myHeap -> arr[(currPos*2)+2] = temp;
       //call siftup again to now check the parent
       siftDown(temp, (currPos*2)+2);
+    } else if (leftChild && leftChild -> frequency < parent -> frequency){
+      //store the parent in temp
+      temp = parent;
+      //reassign the parent
+      myHeap -> arr[currPos] = leftChild;
+      //reassign the child
+      myHeap -> arr[(currPos*2)+1] = temp;
+      //call siftup again to now check the parent
+      siftDown(temp, (currPos*2)+1);
     }
   } else if (leftChild && leftChild -> frequency < parent -> frequency){
       //store the parent in temp
@@ -571,22 +580,13 @@ int tokenizer (char *buff, int buffSize){
       //also insert the special terminator character
       switch(ctemp){
         case '\t':
-          tableInsert("$\t");
+          tableInsert("$t");
           break;
         case ' ':
           tableInsert("$ ");
           break;
         case '\n':
-          tableInsert("$\n");
-          break;
-        case ',':
-          tableInsert(",");
-          break;
-        case '.':
-          tableInsert(".");
-          break;
-        case '"':
-          tableInsert("\"");
+          tableInsert("$n");
           break;
       }
     }
