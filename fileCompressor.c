@@ -276,8 +276,9 @@ int siftDown(struct node * parent, int currPos){
       //reassign the child
       myHeap -> arr[(currPos*2)+2] = temp;
       //call siftup again to now check the parent
-      siftDown(rightChild, (currPos*2)+2);
-    } else if (leftChild && leftChild -> frequency < parent -> frequency){
+      siftDown(temp, (currPos*2)+2);
+    }
+  } else if (leftChild && leftChild -> frequency < parent -> frequency){
       //store the parent in temp
       temp = parent;
       //reassign the parent
@@ -285,9 +286,8 @@ int siftDown(struct node * parent, int currPos){
       //reassign the child
       myHeap -> arr[(currPos*2)+1] = temp;
       //call siftup again to now check the parent
-      siftDown(leftChild, (currPos*2)+1);
+      siftDown(temp, (currPos*2)+1);
     }
-  }
   return currPos;
 }
 
