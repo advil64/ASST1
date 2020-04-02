@@ -43,6 +43,7 @@ int siftUp(struct node *, int);
 int heapInsert(struct node *);
 void printHeap();
 int printTable();
+void freeFiles(int);
 int depthFirstSearch(struct node *, int, char *);
 
 //heap represented as an array with its capacity
@@ -71,6 +72,7 @@ int main (int argc, char ** argv){
   int decompress = 0;
   //counter for the loop
   int i = 0;
+  int fileCounter;
   //loop through the arguments
   for(i = 0; i < argc; i++){
     if(strcmp(argv[i], "-b") == 0){
@@ -106,7 +108,7 @@ int main (int argc, char ** argv){
           exit(1);
         }
         //pass along the file directory to the traversal method which stores the files
-        int fileCounter = direcTraverse(myDirec, 0, 100, argv[i]);
+        fileCounter = direcTraverse(myDirec, 0, 100, argv[i]);
         //we need to build the huffman codebook
         buildCodebook(fileCounter);
         //close the directory
@@ -123,6 +125,8 @@ int main (int argc, char ** argv){
         }
         //the only file
         files[0] = argv[i];
+        //assign 1 to the file counter variable
+        fileCounter = 1;
         //we need to build the huffman codebook
         buildCodebook(1);
       }
@@ -138,7 +142,7 @@ int main (int argc, char ** argv){
       //we need to transfer the hashtable into the heap
       heapTransfer();
       //TODO: remove this before submission
-      printHeap();
+      //printHeap();
       //now we need to start building the Huffman Tree
       buildSubTrees();
       //TODO: remove this before submission
@@ -153,26 +157,30 @@ int main (int argc, char ** argv){
       close(codFD);
     }
   }
+  //release the files!
+  freeFiles(fileCounter);
   //we're done!
   return 0;
 }
 
-/* writes the codes to a codebook file */
+/* writes the codes to a codebook file and frees the tree*/
 int depthFirstSearch(struct node * curr, int fd, char * path){
   //create a local copy of the path
   char localPath[PATH_MAX];
   strcpy(localPath, path);
   //for some reason if curr is null, gtfo
-  if(curr == NULL){
+  if(!curr){
     return 0;
   }
   //check to see if the node has children
   if(curr->identifier == 1){
-    //if not, we have hit a leaf node
+    //if not, we have hit a leaf node write its code
     write(fd, path, strlen(path));
     write(fd, "\t", 1);
     write(fd, curr -> myKey, strlen(curr -> myKey));
     write(fd, "\n", 1);
+    //free the node!
+    free(curr);
     //return success
     return 0;
   } else{
@@ -195,11 +203,13 @@ int depthFirstSearch(struct node * curr, int fd, char * path){
       depthFirstSearch(curr->lChild, fd, localPath);
     }
   }
+  //free the node!
+  free(curr);
   //return success
   return 0;
 }
 
-/*Start building the Subtrees Tree*/
+/*Start building the Subtrees Tree and free the heap upon completion*/
 int buildSubTrees(){
   //have a temp node to store the pops
   struct node * temp1 = NULL;
@@ -419,7 +429,7 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
       //skip the iteration
       continue;
     }
-    //first check if the currdir is a file or a directory
+    //first check if the currdir is a regular file or a directory
     if(currDir->d_type == DT_DIR){
       //add the directory in question to the path
       strcat(filePBuff, currDir->d_name);
@@ -431,9 +441,9 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
       strcat(filePBuff, "/");
       //find the new max size of the array
       currSize = ((counter%100)+1)*100;
-    } else{
+    } else if(currDir -> d_type == DT_REG){
       //allocate space for the file path
-      files[counter] = malloc((PATH_MAX+1) * sizeof(char));
+      files[counter] = (char *)malloc((PATH_MAX+1) * sizeof(char));
       //add the file path to the array
       strcpy(files[counter],filePBuff);
       //store the names of the files in our files array
@@ -459,6 +469,23 @@ int direcTraverse (DIR *myDirectory, int counter, int currSize, char * currDirec
   //return the current count
   return counter;
 }
+
+/* free the files array */
+void freeFiles(int numberOfFiles){
+  //counter
+  int i;
+  //no need to loop is there is only one file
+  if(numberOfFiles > 1){
+    //loop through the files array and free em all
+    for(i = 0; i < numberOfFiles; i++){
+      //free file at i
+      free(files[i]);
+    }
+  }
+  //free the files array itself
+  free(files);
+}
+
 
 /* iterates through the files and first calls file reader on each file */
 int buildCodebook (int filesSize){
@@ -563,7 +590,7 @@ int tokenizer (char *buff, int buffSize){
   while(buff[counter] != '\0'){
     ctemp = buff[counter];
     //check if we have hit a space
-    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n' || ctemp == ',' || ctemp == '.' || ctemp == '"'){
+    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n'){
       //we don't need to store empty tokens
       if(strcmp(cdata, "") != 0){
         //isolate the token and insert it into the table
