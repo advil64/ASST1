@@ -44,6 +44,7 @@ int heapInsert(struct node *);
 void printHeap();
 int printTable();
 void freeFiles(int);
+int decompressFiles(int);
 int depthFirstSearch(struct node *, int, char *);
 
 //heap represented as an array with its capacity
@@ -56,7 +57,7 @@ struct heap{
   int cap;
 };
 
-//global variable which stores the names of the files from which we build the huffman codebook
+//global variables
 char ** files;
 struct node * hashTable[256];
 struct heap * myHeap;
@@ -109,8 +110,6 @@ int main (int argc, char ** argv){
         }
         //pass along the file directory to the traversal method which stores the files
         fileCounter = direcTraverse(myDirec, 0, 100, argv[i]);
-        //we need to build the huffman codebook
-        buildCodebook(fileCounter);
         //close the directory
         closedir(myDirec);
       } else{
@@ -127,9 +126,9 @@ int main (int argc, char ** argv){
         files[0] = argv[i];
         //assign 1 to the file counter variable
         fileCounter = 1;
-        //we need to build the huffman codebook
-        buildCodebook(1);
       }
+      //we need to build the huffman codebook
+        buildCodebook(fileCounter);
       //TODO: delete this in final iteration of project
       //printTable();
       //after building the hashtable, we need to store everything in a heap
@@ -155,12 +154,83 @@ int main (int argc, char ** argv){
       depthFirstSearch(huffHead, codFD, "");
       //close the file descriptor once we're done writing
       close(codFD);
+    } else if(decompress){
+      //check out how we're traversing this directory
+      if(recursive){
+        //make space in the files array
+        files = (char **) malloc(100 * sizeof(char *));
+        //check is the given file exists
+        if(!files){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: Not enough memory\n");
+          //exit the code
+          exit(1);
+        }
+        //open the directory stream
+        DIR *myDirec = opendir(argv[i]);
+        //check is the given file exists
+        if(!myDirec){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: File does not exist\n");
+          //exit the code
+          exit(1);
+        }
+        //pass along the file directory to the traversal method which stores the files
+        fileCounter = direcTraverse(myDirec, 0, 100, argv[i]);
+        //close the directory
+        closedir(myDirec);
+      } else{
+        //there is only one file to decompress
+        files = (char **) malloc(1 * sizeof(char *));
+        //check is the given file exists
+        if(!files){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: Not enough memory\n");
+          //exit the code
+          exit(1);
+        }
+        //the only file
+        files[0] = argv[i];
+        //assign 1 to the file counter variable
+        fileCounter = 1;
+      }
+      //call the decompress files method and pass in the files counter
+      decompressFiles(fileCounter);
     }
   }
   //release the files!
   freeFiles(fileCounter);
   //we're done!
   return 0;
+}
+
+/*this method traversees the files array and decompresses all of them*/
+int decompressFiles(int numOfFiles){
+  //counter and other stuff
+  int i;
+  char filePath[PATH_MAX+1];
+  char fileType[4];
+  int length;
+  //loop through the files and skip the ones not compressed already
+  for(i = 0; i < numOfFiles; i++){
+    //calculate the index of the point
+    length = strlen(files[i]);
+    //check to see if the path is even valid
+    if(length < 5){
+      continue;
+    }
+    //split the path and type
+    strncpy(fileType, &files[i][length-4], 4);
+    strncpy(filePath, files[i], length-4);
+    //we need to add a null terminator to the filepath
+    filePath[length-4] = '\0';
+    //check if the file is an hcz file
+    if(strcmp(fileType, ".hcz") == 0){
+
+    }
+  }
+  //return i
+  return i;
 }
 
 /* writes the codes to a codebook file and frees the tree*/
