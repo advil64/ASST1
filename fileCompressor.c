@@ -147,7 +147,7 @@ int main (int argc, char ** argv){
       //TODO: remove this before submission
       //printHeap();
       //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
-      int codFD = open("HuffmanCodebook", O_RDWR | O_CREAT);
+      int codFD = open("HuffmanCodebook", O_RDWR | O_CREAT,  S_IRUSR | S_IWUSR);
       //write the escape character being used
       write(codFD, "$ \n", 3);
       //call the DFS to calculate the huffman codes
@@ -618,10 +618,12 @@ int fileReader (int fileDescriptor){
       //malloc the new array to myBuffer
       myBuffer = (char *)malloc(buffSize*sizeof(char));
       //check if the pointer is null
-      if(temp == NULL){
+      if(myBuffer == NULL){
         //print an error
         printf("ERROR: Not enough space on heap\n");
       }
+      //set everything in the buffer to the null terminator
+      memset(myBuffer, '\0', buffSize);
       //copy the old memory into the new buffer
       memcpy(myBuffer, temp, readIn);
       //free the old memory that was allocated
@@ -629,7 +631,7 @@ int fileReader (int fileDescriptor){
     }
   }
   //TODO: delete, this is only for testing purposes
-  //printf("%s", myBuffer);
+  printf("%s", myBuffer);
   //we hand over the contents of our file (stored in buffer) to the table loader function
   tokenizer(myBuffer, buffSize);
   //finish it
@@ -660,7 +662,7 @@ int tokenizer (char *buff, int buffSize){
   while(buff[counter] != '\0'){
     ctemp = buff[counter];
     //check if we have hit a space
-    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n'){
+    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n' || ctemp == '\0'){
       //we don't need to store empty tokens
       if(strcmp(cdata, "") != 0){
         //isolate the token and insert it into the table
