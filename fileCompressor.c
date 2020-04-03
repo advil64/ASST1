@@ -47,6 +47,8 @@ void freeFiles(int);
 int decompressFiles(int);
 void buildHuffTree(char *, int);
 int codebookReader (int);
+int huffInsert(char *, char *, struct node *);
+int readHcz(int, int);
 int depthFirstSearch(struct node *, int, char *);
 
 //heap represented as an array with its capacity
@@ -130,7 +132,7 @@ int main (int argc, char ** argv){
         fileCounter = 1;
       }
       //we need to build the huffman codebook
-        buildCodebook(fileCounter);
+      buildCodebook(fileCounter);
       //TODO: delete this in final iteration of project
       //printTable();
       //after building the hashtable, we need to store everything in a heap
@@ -209,6 +211,7 @@ int main (int argc, char ** argv){
       huffHead = (struct node *)malloc(sizeof(struct node));
       huffHead -> rChild = NULL;
       huffHead -> lChild = NULL;
+      huffHead ->identifier = 0;
       //we need to build the huffman tree
       codebookReader(cdFd);
       //call the decompress files method and pass in the files counter
@@ -279,20 +282,29 @@ int codebookReader (int fileDescriptor){
 void buildHuffTree(char * myBook, int buffSize){
   //store the path and token
   char currPath[PATH_MAX+1];
+  //reset the path
+  memset(currPath, '\0', PATH_MAX+1);
+  //malloc the token
   char * token = (char *)malloc(101*sizeof(char));
+  char * temp;
+  //set tokens to null
+  memset(token, '\0', 101);
+  //initial token size
+  int tokenSize = 100;
   //counter
-  int i = 0;
+  int t = 0;
   int indicator = 0;
   int localCount = 0;
   //we need to skip to the meat of the notebook 
-  while(myBook[i] != '\n'){
+  while(myBook[t] != '\n'){
     //just keep incrementing i
-    i++;
+    t++;
   }
   //add one for good luck!
-  i++;
+  t++;
+  int i;
   //now traverse the codebook
-  for(i = i; i < buffSize; i++){
+  for(i = t; i < buffSize; i++){
     //if we hit a tab, switch the indicator to 1
     if(myBook[i] == '\t'){
       //start getting the token
@@ -301,18 +313,38 @@ void buildHuffTree(char * myBook, int buffSize){
       currPath[localCount] = '\0';
       localCount = 0;
     } else if(myBook[i] == '\n'){
+      //add a null terminator just in case
+      token[localCount] = '\0';
       //insert the token into the appropriate spot of the huffman tree
       huffInsert(currPath, token, huffHead);
       //flip the indicator back
       indicator = 0;
+      //make a new token
+      token = malloc(101*sizeof(char));
+      //reset token size as well
+      tokenSize = 100;
       //reset localCount and add the null terminator
-      token[localCount] = '\0';
       localCount = 0;
+      //reset the path as well
+      memset(currPath, '\0', PATH_MAX+1);
     } else if(!indicator){
       //calculate the path
       currPath[localCount] = myBook[i];
       localCount++;
     } else if(indicator){
+      //check to see if localcount went overboard
+      if(localCount >= tokenSize){
+        //temporily move token to temp
+        temp = token;
+        //malloc more memory to token
+        token = (char *)malloc((tokenSize+101)*sizeof(char));
+        //increase token size
+        tokenSize += 101;
+        //set token to \0
+        memset(token, '\0', tokenSize);
+        //move the temp stuff back into token
+        memcpy(token, temp, tokenSize-100);
+      }
       //find the token
       token[localCount] = myBook[i];
       localCount++;
@@ -328,7 +360,41 @@ int huffInsert(char * currPath, char * token, struct node * curr){
     curr -> lChild = NULL;
     curr ->identifier = 1;
     curr ->myKey = token;
+  } else{
+    //check to go right or left
+    if(currPath[0] == '0'){
+      //go left, check if it's null
+      if(!(curr -> lChild)){
+        //allocate memory
+        curr -> lChild = (struct node *)malloc(sizeof(struct node));
+        //make sure the that its children are nulled out
+        curr -> lChild -> rChild = NULL;
+        curr -> lChild -> lChild = NULL;
+      }
+      //change path accordingly
+      currPath++;
+      //make sure the identifier signifies a parent
+      curr ->identifier = 0;
+      //recursively call huffInsert
+      huffInsert(currPath, token, curr -> lChild);
+    } else if(currPath[0] == '1'){
+      //we need to go right
+      if(!(curr -> rChild)){
+        //allocate memory
+        curr -> rChild = (struct node *)malloc(sizeof(struct node));
+        //make sure the that its children are nulled out
+        curr -> rChild -> rChild = NULL;
+        curr -> rChild -> lChild = NULL;
+      }
+      //change path accordingly
+      currPath++;
+      //make sure the identifier signifies a parent
+      curr ->identifier = 0;
+      //recursively call huffInsert
+      huffInsert(currPath, token, curr -> rChild);
+    }
   }
+  return 0;
 }
 
 /* TODO this method traversees the files array and decompresses all of them*/
@@ -338,6 +404,8 @@ int decompressFiles(int numOfFiles){
   char filePath[PATH_MAX+1];
   char fileType[4];
   int length;
+  int fd;
+  int writefd;
   //loop through the files and skip the ones not compressed already
   for(i = 0; i < numOfFiles; i++){
     //calculate the index of the point
@@ -353,11 +421,60 @@ int decompressFiles(int numOfFiles){
     filePath[length-4] = '\0';
     //check if the file is an hcz file
     if(strcmp(fileType, ".hcz") == 0){
-
+      //open the huffman codebook file
+      fd = open(files[i], O_RDONLY);
+      //also open the file descriptor to write
+      writefd = open(filePath, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+      //pass it into the readHcz method to be read
+      readHcz(fd, writefd);
     }
   }
   //return i
   return i;
+}
+
+/*Reads the given .hcz file*/
+int readHcz(int readFD, int writeFD){
+  //store the character read from the hcz file
+  char * direction = (char *)malloc(2*sizeof(char));
+  //store the current node
+  struct node * curr = huffHead;
+  //status indicates the number of bits read
+  int status = 1;
+  //loop through the bitcode in the hcz file
+  while(status != 0){
+    //read in a bit and pick the direction
+    status = read(readFD, direction, 1);
+    //check if status is 1
+    if(status == 1){
+      //go down the tree accordingly
+      if(direction[0] == '1'){
+        //we need to go right
+        if(!(curr -> rChild)){
+          //there's something wrong
+          printf("Warning: Codebook mismatch");
+          exit(1);
+        }
+        curr = curr -> rChild;
+      } else if(direction[0] == '0'){
+        //we need to go left
+        if(!(curr -> lChild)){
+          //there's something wrong
+          printf("Warning: Codebook mismatch");
+          exit(1);
+        }
+        curr = curr -> lChild;
+      }
+      //check to see if you hit a leaf
+      if(curr ->identifier == 1){
+        //we need to write the token to the write fd
+        write(writeFD, curr -> myKey, strlen(curr -> myKey));
+        //reset curr to be the huffman head
+        curr = huffHead;
+      }
+    }
+  }
+  return status;
 }
 
 /* writes the codes to a codebook file and frees the tree*/
