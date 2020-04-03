@@ -45,6 +45,8 @@ void printHeap();
 int printTable();
 void freeFiles(int);
 int decompressFiles(int);
+void buildHuffTree(char *, int);
+int codebookReader (int);
 int depthFirstSearch(struct node *, int, char *);
 
 //heap represented as an array with its capacity
@@ -194,6 +196,21 @@ int main (int argc, char ** argv){
         //assign 1 to the file counter variable
         fileCounter = 1;
       }
+      //open the codebook
+      int cdFd = open(argv[i+1], O_RDONLY);
+      //make a warning if it's not correct
+      if(cdFd < 0){
+        //codebook not present
+        printf("Warning: Codebook not present");
+      }
+      //increment i so we don't reread the codebook
+      i++;
+      //allocate the parent node for the huffman tree
+      huffHead = (struct node *)malloc(sizeof(struct node));
+      huffHead -> rChild = NULL;
+      huffHead -> lChild = NULL;
+      //we need to build the huffman tree
+      codebookReader(cdFd);
       //call the decompress files method and pass in the files counter
       decompressFiles(fileCounter);
     }
@@ -204,7 +221,117 @@ int main (int argc, char ** argv){
   return 0;
 }
 
-/*this method traversees the files array and decompresses all of them*/
+/* Reads the given file and loads it into a local buffer */
+int codebookReader (int fileDescriptor){
+  //buffer size
+  int buffSize = 100;
+  //create the buffer to store the file
+  char *myBuffer = (char *)malloc(101*sizeof(char));
+  //check if the pointer is null
+  if(myBuffer == NULL){
+    //print an error
+    printf("ERROR: Not enough space on heap\n");
+  }
+  //set everything in the buffer to the null terminator
+  memset(myBuffer, '\0', 101);
+  //store the status of the read
+  int readIn = 0;
+  int status = 1;
+  //temp pointer to hold the dynamically sized buffer
+  char *temp;
+  //loop until everything has been read
+  while(status > 0){ 
+    //read buff size number of chars and store in myBuffer
+    do{
+      status = read(fileDescriptor, myBuffer+readIn, 100);
+      readIn += status;
+    }while(readIn < buffSize && status > 0);
+    //check if there are more chars left
+    if(status > 0){
+      //increase the array size by 100
+      buffSize += 100;
+      //store the old values in the temp pointer
+      temp = myBuffer;
+      //malloc the new array to myBuffer
+      myBuffer = (char *)malloc(buffSize*sizeof(char));
+      //check if the pointer is null
+      if(myBuffer == NULL){
+        //print an error
+        printf("ERROR: Not enough space on heap\n");
+      }
+      //set everything in the buffer to the null terminator
+      memset(myBuffer, '\0', buffSize);
+      //copy the old memory into the new buffer
+      memcpy(myBuffer, temp, readIn);
+      //free the old memory that was allocated
+      free(temp);
+    }
+  }
+  //TODO: delete, this is only for testing purposes
+  //printf("%s", myBuffer);
+  //we hand over the contents of our file (stored in buffer) to the table loader function
+  buildHuffTree(myBuffer, buffSize);
+  //finish it
+  return 0;
+}
+
+/* traverse through the given huffman codebook */
+void buildHuffTree(char * myBook, int buffSize){
+  //store the path and token
+  char currPath[PATH_MAX+1];
+  char * token = (char *)malloc(101*sizeof(char));
+  //counter
+  int i = 0;
+  int indicator = 0;
+  int localCount = 0;
+  //we need to skip to the meat of the notebook 
+  while(myBook[i] != '\n'){
+    //just keep incrementing i
+    i++;
+  }
+  //add one for good luck!
+  i++;
+  //now traverse the codebook
+  for(i = i; i < buffSize; i++){
+    //if we hit a tab, switch the indicator to 1
+    if(myBook[i] == '\t'){
+      //start getting the token
+      indicator = 1;
+      //reset localCount and add the null terminator
+      currPath[localCount] = '\0';
+      localCount = 0;
+    } else if(myBook[i] == '\n'){
+      //insert the token into the appropriate spot of the huffman tree
+      huffInsert(currPath, token, huffHead);
+      //flip the indicator back
+      indicator = 0;
+      //reset localCount and add the null terminator
+      token[localCount] = '\0';
+      localCount = 0;
+    } else if(!indicator){
+      //calculate the path
+      currPath[localCount] = myBook[i];
+      localCount++;
+    } else if(indicator){
+      //find the token
+      token[localCount] = myBook[i];
+      localCount++;
+    }
+  }
+}
+
+int huffInsert(char * currPath, char * token, struct node * curr){
+  //follow the instructions given in the path
+  if(strcmp(currPath, "") == 0){
+    //we have found the node ladies and gents
+    curr -> rChild = NULL;
+    curr -> lChild = NULL;
+    curr ->identifier = 1;
+    curr ->myKey = token;
+  }
+}
+
+/* TODO this method traversees the files array and decompresses all of them*/
 int decompressFiles(int numOfFiles){
   //counter and other stuff
   int i;
