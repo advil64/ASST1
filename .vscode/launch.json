@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": ["-d", "./testDirectory/subDirec2/subDirec1/test7.txt.hcz", "./HuffmanCodebook"],
+            "args": ["-b", "./testDirectory/subDirec2/subDirec1/test7.txt"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

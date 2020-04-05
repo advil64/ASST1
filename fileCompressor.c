@@ -108,7 +108,7 @@ int main (int argc, char ** argv){
         //check is the given file exists
         if(!myDirec){
           //file does not exist it is a fatal error
-          printf("FATAL ERROR: File does not exist\n");
+          printf("FATAL ERROR: Directory does not exist\n");
           //exit the code
           exit(1);
         }
@@ -151,7 +151,7 @@ int main (int argc, char ** argv){
       //TODO: remove this before submission
       //printHeap();
       //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
-      int codFD = open("HuffmanCodebook", O_RDWR | O_CREAT,  S_IRUSR | S_IWUSR);
+      int codFD = open("HuffmanCodebook", O_TRUNC | O_RDWR | O_CREAT,  S_IRUSR | S_IWUSR);
       //write the escape character being used
       write(codFD, "$ \n", 3);
       //call the DFS to calculate the huffman codes
@@ -175,7 +175,7 @@ int main (int argc, char ** argv){
         //check is the given file exists
         if(!myDirec){
           //file does not exist it is a fatal error
-          printf("FATAL ERROR: File does not exist\n");
+          printf("FATAL ERROR: Directory does not exist\n");
           //exit the code
           exit(1);
         }
@@ -906,7 +906,7 @@ int tokenizer (char *buff, int buffSize){
   while(buff[counter] != '\0'){
     ctemp = buff[counter];
     //check if we have hit a space
-    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n' || ctemp == '\0'){
+    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n'){
       //we don't need to store empty tokens
       if(strcmp(cdata, "") != 0){
         //isolate the token and insert it into the table
@@ -926,7 +926,7 @@ int tokenizer (char *buff, int buffSize){
           tableInsert("$t");
           break;
         case ' ':
-          tableInsert("$ ");
+          tableInsert("$");
           break;
         case '\n':
           tableInsert("$n");
@@ -961,6 +961,11 @@ int tokenizer (char *buff, int buffSize){
     //increment counters
     counter++;
     localcount++;
+  }
+  //we have reached the end put the last guy in there
+  if(buff[counter] == '\0'){
+    //isolate the token and insert it into the table
+    tableInsert(cdata);
   }
   return 0;
 }
