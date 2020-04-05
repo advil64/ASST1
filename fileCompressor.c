@@ -64,6 +64,7 @@ struct heap{
 //global variables
 char ** files;
 struct node * hashTable[256];
+struct node * huffmanTable[256];
 struct heap * myHeap;
 struct node * huffHead;
 
@@ -93,6 +94,9 @@ int main (int argc, char ** argv){
       //we need to decompress the given file
       decompress = 1;
     } else if(build){
+      //we're building a hash table, memset that mofo
+      memset(hashTable, 0x0, 256*sizeof(struct node *));
+      //check if we have to traverse multiple files
       if(recursive){
         //make space in the files array
         files = (char **) malloc(100 * sizeof(char *));
@@ -216,6 +220,52 @@ int main (int argc, char ** argv){
       codebookReader(cdFd);
       //call the decompress files method and pass in the files counter
       decompressFiles(fileCounter);
+    } else if(compress){
+      //check out how we're traversing this directory
+      if(recursive){
+        //make space in the files array
+        files = (char **) malloc(100 * sizeof(char *));
+        //check is the given file exists
+        if(!files){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: Not enough memory\n");
+          //exit the code
+          exit(1);
+        }
+        //open the directory stream
+        DIR *myDirec = opendir(argv[i]);
+        //check is the given file exists
+        if(!myDirec){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: Directory does not exist\n");
+          //exit the code
+          exit(1);
+        }
+        //pass along the file directory to the traversal method which stores the files
+        fileCounter = direcTraverse(myDirec, 0, 100, argv[i]);
+        //close the directory
+        closedir(myDirec);
+      } else{
+        //there is only one file to decompress
+        files = (char **) malloc(1 * sizeof(char *));
+        //check is the given file exists
+        if(!files){
+          //file does not exist it is a fatal error
+          printf("FATAL ERROR: Not enough memory\n");
+          //exit the code
+          exit(1);
+        }
+        //the only file
+        files[0] = argv[i];
+        //assign 1 to the file counter variable
+        fileCounter = 1;
+      }
+      // declaring file descriptor for Huffman Codebook
+  	  int huffFD = open(argv[i+1], O_RDONLY);
+      //add one to avoid reading the codebook again
+      i++;
+      //create a hashtable which stores the values of the huffman codebook
+      huffmanCodebookReader(huffDF);
     }
   }
   //release the files!
@@ -223,6 +273,181 @@ int main (int argc, char ** argv){
   //we're done!
   return 0;
 }
+
+/* Read the given file descriptor and write each item to the huffman table */
+int huffmanCodebookReader (int fileDescriptor){
+  //buffer size
+  int buffSize = 100;
+  //create the buffer to store the file
+  char *myBuffer = (char *)malloc(101*sizeof(char));
+  //check if the pointer is null
+  if(myBuffer == NULL){
+    //print an error
+    printf("ERROR: Not enough space on heap\n");
+  }
+  //set everything in the buffer to the null terminator
+  memset(myBuffer, '\0', 101);
+  //store the status of the read
+  int readIn = 0;
+  int status = 1;
+  //temp pointer to hold the dynamically sized buffer
+  char *temp;
+  //loop until everything has been read
+  while(status > 0){ 
+    //read buff size number of chars and store in myBuffer
+    do{
+      status = read(fileDescriptor, myBuffer+readIn, 100);
+      readIn += status;
+    }while(readIn < buffSize && status > 0);
+    //check if there are more chars left
+    if(status > 0){
+      //increase the array size by 100
+      buffSize += 100;
+      //store the old values in the temp pointer
+      temp = myBuffer;
+      //malloc the new array to myBuffer
+      myBuffer = (char *)malloc(buffSize*sizeof(char));
+      //check if the pointer is null
+      if(temp == NULL){
+        //print an error
+        printf("ERROR: Not enough space on heap\n");
+      }
+      //copy the old memory into the new buffer
+      memcpy(myBuffer, temp, readIn);
+      //free the old memory that was allocated
+      free(temp);
+    }
+  }
+  huffTokenizer(myBuffer, readIn);
+}
+
+
+/*this method will be for going through the huffman codebook*/
+int huffTokenizer (char *buff, int buffSize){
+  //counter to loop through the buffer
+  int counter = 0;
+  //counter to loop through the cdata
+  int localcount = 0;
+  char ctemp;
+  int indicator = 0;
+  //allocate starting space into cdata
+  char *cdata = (char *)malloc(11*sizeof(char));
+  char *bdata = (char *)malloc(11*sizeof(char));
+  char *temp;
+  //check if the pointer is null
+  if(!cdata || !bdata){
+    //print an error
+    printf("ERROR: Not enough space on heap\n");
+  }
+  //set the array to be all null terminators
+  memset(cdata, '\0', 11);
+  memset(bdata, '\0', 11);
+  //initial sizes
+  int cSize = 10;
+  int bSize = 10;
+  //loop through the string until we hit a terminator which means end of the buffer and text file
+  while(buff[counter] != '\0'){
+    ctemp = buff[counter];
+    //check if we have hit a newline
+    if(ctemp == '\n') { 
+    	// dont need to store empty tokens TODO: add this to the decompress method
+    	if(strcmp(bdata, "") != 0) {
+        //null terminate our bdata TODO:I left off here, debug tomorrow
+
+        //insert our bitcode and token into the hashtable
+    		hInsert(cdata, bdata);
+    		// reset all the badboys
+    		cdata = (char *)malloc(11*sizeof(char));
+    		bdata = (char *)malloc(11*sizeof(char)); 
+    		memset(cdata, '\0', 11);
+    		memset(bdata, '\0', 11);
+        	currSize = 10;
+        	count = 0;
+    	}
+    	localcount = -1;
+    }
+    //check if we have hit a tab
+    else if(ctemp == '\t'){
+      //we don't need to store empty tokens
+     	if(strcmp(cdata, "") != 0){
+        //allocate a new cdata for the next token
+        //reset the shit
+        currSize = 10;
+        count = 1; // count now set to 1 means we are working with BITCODE STRING now
+      }
+      //reset the local count
+      localcount = -1;
+      //dont need Adviths switch statements, huffman codebook formatted properly
+    }
+    if(count == 1) { // we are dealing with the bitcode
+    	if(localcount == currSize) {
+    		currSize += 10;
+    		temp = bdata;
+    		bdata = (char*)malloc(currSize*sizeof(char));
+    		if(bdata == NULL) {
+    			printf("ERROR: Not enough space on heap\n");
+    		}
+    		memset(bdata, '\0', currSize);
+    		memcpy(bdata,temp,localcount);
+    		free(temp);
+    		bdata[localcount] = buff[counter];
+    	}
+    	else {
+    		bdata[localcount] = buff[counter];
+    	}
+
+    }
+    else { // we are dealing with the token
+    	if(localcount == currSize){
+     	currSize += 10;
+      	temp = cdata;
+      	cdata = (char *)malloc(currSize*sizeof(char));
+      	if(cdata == NULL){
+        	printf("ERROR: Not enough space on heap\n");
+      	}
+      	memset(cdata, '\0', currSize);
+      	memcpy(cdata, temp, localcount);
+      	free(temp);
+      	cdata[localcount] = buff[counter];
+    	} 
+    	else {
+      	//store the buffer character into the cdata character
+      	cdata[localcount] = buff[counter];
+    	}
+	}
+    //increment counters
+    counter++;
+    localcount++;
+  }
+  return 0;
+}
+
+/* this method will take the token and bitcode of the token and make a node for it and insert it into the hashtable
+int hInsert (char * name, char * bitname) {
+	int sum = 0;
+	for (int i = 0; i < strlen(name); i++){
+    	sum = sum + (int)name[i];
+	}
+	int index = sum % 256;
+	if(tbl[index] == NULL) { // table is empty
+		struct huffNode * new = (struct huffNode *)malloc(sizeof(struct huffNode));
+		new->token = name;
+		new->bittok = bitname;
+    tbl[index] = new;
+    return 0;
+	}
+	else {
+		struct huffNode * temp = tbl[index];
+		while (temp -> next != NULL) {
+			temp = temp->next;
+		}
+		temp->next = (struct huffNode *)malloc(sizeof(struct huffNode));
+		temp->next->token = name;
+		temp->next->bittok = bitname;
+    return 0;
+	}
+}
+*/
 
 /* Reads the given file and loads it into a local buffer */
 int codebookReader (int fileDescriptor){
@@ -352,6 +577,7 @@ void buildHuffTree(char * myBook, int buffSize){
   }
 }
 
+/*Insert the node in the correct part of our huffman tree*/
 int huffInsert(char * currPath, char * token, struct node * curr){
   //follow the instructions given in the path
   if(strcmp(currPath, "") == 0){
@@ -982,6 +1208,11 @@ int tableInsert(char *token){
   }
   //mod it to fit inside the 256 length array
   int index = sum % 256;
+  //error check the index
+  if(index < 0){
+    //make the index positive
+    index *= -1;
+  }
   //check to see if the head node of the given index is Null
   if(hashTable[index] == NULL){
     //create a new node and put er in there
