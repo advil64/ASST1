@@ -49,6 +49,9 @@ void buildHuffTree(char *, int);
 int codebookReader (int);
 int huffInsert(char *, char *, struct node *);
 int readHcz(int, int);
+int huffmanCodebookReader (int);
+int huffTokenizer (char *, int);
+int hInsert (char *, char *);
 int depthFirstSearch(struct node *, int, char *);
 
 //heap represented as an array with its capacity
@@ -61,10 +64,17 @@ struct heap{
   int cap;
 };
 
+//struct for the comparision nodes hashtable
+struct huffNode { // the huffman codebook nodes
+  char * token; // the token
+  char * bittok; // the bitcode
+  struct huffNode * next; // the next node in the linked list (these nodes will be stored in a hashtable)
+};
+
 //global variables
 char ** files;
 struct node * hashTable[256];
-struct node * huffmanTable[256];
+struct huffNode * huffmanTable[256];
 struct heap * myHeap;
 struct node * huffHead;
 
@@ -265,13 +275,233 @@ int main (int argc, char ** argv){
       //add one to avoid reading the codebook again
       i++;
       //create a hashtable which stores the values of the huffman codebook
-      huffmanCodebookReader(huffDF);
+      huffmanCodebookReader(huffFD);
     }
   }
   //release the files!
   freeFiles(fileCounter);
   //we're done!
   return 0;
+}
+
+/* this method traverses the files array and compresses all of them */
+int compressFiles(int numOfFiles){
+  //counter and other stuff
+  int i;
+  char filePath[PATH_MAX+1];
+  char fileType[4];
+  char newFilePath[PATH_MAX+1];
+  int length;
+  int fd;
+  int writefd;
+  //loop through the files and skip the ones not compressed already
+  for(i = 0; i < numOfFiles; i++){
+    //calculate the index of the point
+    length = strlen(files[i]);
+    //check to see if the path is even valid
+    if(length < 5){
+      continue;
+    }
+    //split the path and type
+    strncpy(fileType, &files[i][length-4], 4);
+    strncpy(filePath, files[i], length-4);
+    //we need to add a null terminator to the filepath
+    filePath[length-4] = '\0';
+    //check if the file is an hcz file and skip if it is
+    if(strcmp(fileType, ".hcz") != 0){
+      //open the huffman codebook file
+      fd = open(files[i], O_RDONLY);
+      //copy the files[i] into the newfilepath
+      strcpy(newFilePath, files[i]);
+      //concatenate the .hcz onto the new file path
+      strcat(newFilePath, ".hcz");
+      //also open the file descriptor to write
+      writefd = open(newFilePath, O_TRUNC | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+      //read the file
+      compressionFileReader(fd, writefd);
+    }
+  }
+  //return i
+  return i;
+}
+
+/* Reads the given file and loads it into a local buffer */
+int compressionFileReader (int fileDescriptor, int writeFD){
+  //buffer size
+  int buffSize = 100;
+  //create the buffer to store the file
+  char *myBuffer = (char *)malloc(101*sizeof(char));
+  //check if the pointer is null
+  if(myBuffer == NULL){
+    //print an error
+    printf("ERROR: Not enough space on heap\n");
+  }
+  //set everything in the buffer to the null terminator
+  memset(myBuffer, '\0', 101);
+  //store the status of the read
+  int readIn = 0;
+  int status = 1;
+  //temp pointer to hold the dynamically sized buffer
+  char *temp;
+  //loop until everything has been read
+  while(status > 0){ 
+    //read buff size number of chars and store in myBuffer
+    do{
+      status = read(fileDescriptor, myBuffer+readIn, 100);
+      readIn += status;
+    }while(readIn < buffSize && status > 0);
+    //check if there are more chars left
+    if(status > 0){
+      //increase the array size by 100
+      buffSize += 100;
+      //store the old values in the temp pointer
+      temp = myBuffer;
+      //malloc the new array to myBuffer
+      myBuffer = (char *)malloc(buffSize*sizeof(char));
+      //check if the pointer is null
+      if(myBuffer == NULL){
+        //print an error
+        printf("ERROR: Not enough space on heap\n");
+      }
+      //set everything in the buffer to the null terminator
+      memset(myBuffer, '\0', buffSize);
+      //copy the old memory into the new buffer
+      memcpy(myBuffer, temp, readIn);
+      //free the old memory that was allocated
+      free(temp);
+    }
+  }
+  //TODO: delete, this is only for testing purposes
+  printf("%s", myBuffer);
+  //we hand over the contents of our file (stored in buffer) to the table loader function
+  savTokenizer(myBuffer, buffSize, writeFD);
+  //finish it
+  return 0;
+}
+
+/* After reading the complete contents of a given file(in this case the text file we want compressed), we need to split the file up into tokens
+and then load each token into the linked list.  This is also a modified version of Adviths tokenizer */
+int savTokenizer (char *buff, int buffSize, int writeFD){
+  //counter to loop through the buffer
+  int counter = 0;
+  //counter to loop through the cdata
+  int localcount = 0;
+  char ctemp;
+  //allocate starting space into cdata
+  char *cdata = (char *)malloc(11*sizeof(char));
+  char *temp;
+  //check if the pointer is null
+  if(cdata == NULL){
+    //print an error
+    printf("ERROR: Not enough space on heap\n");
+  }
+  //set the array to be all null terminators
+  memset(cdata, '\0', 11);
+  //current size of cdata
+  int currSize = 10;
+  //loop through the string until we hit a comma or terminator
+  while(buff[counter] != '\0'){
+    ctemp = buff[counter];
+    //check if we have hit a space
+    if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n'){
+      //we don't need to store empty tokens
+      if(strcmp(cdata, "") != 0){
+        //isolate the token and insert it into the table
+        compressionWriter(cdata, writeFD);
+        //freecdata we're done with using it
+        free(cdata);
+        //allocate a new cdata for the next token
+        cdata = (char *)malloc(11*sizeof(char));
+        //set the array to be all null terminators
+        memset(cdata, '\0', 11);
+        //reset the curr size
+        currSize = 10;
+      }
+      //reset the local count
+      localcount = -1;
+      //also insert the special terminator character
+      switch(ctemp){
+        case '\t':
+          compressionWriter("\t", writeFD);
+          break;
+        case ' ':
+          compressionWriter(" ", writeFD);
+          break;
+        case '\n':
+          compressionWriter("\n", writeFD);
+          break;
+      }
+    }
+    //store the character in the node array
+    else if(localcount == currSize){
+      //make the cdata array 10 characters bigger
+      currSize += 10;
+      //store the old values in the temp pointer
+      temp = cdata;
+      //malloc the new array to myBuffer
+      cdata = (char *)malloc(currSize*sizeof(char));
+      //check if the pointer is null
+      if(cdata == NULL){
+        //print an error
+        printf("ERROR: Not enough space on heap\n");
+      }
+      //set the random stuff to null terminators again
+      memset(cdata, '\0', currSize);
+      //copy the old memory into the new buffer
+      memcpy(cdata, temp, localcount);
+      //free the old variable
+      free(temp);
+      //store the buffer char
+      cdata[localcount] = buff[counter];
+    } else{
+      //store the buffer character into the cdata character
+      cdata[localcount] = buff[counter];
+    }
+    //increment counters
+    counter++;
+    localcount++;
+  }
+  loader(cdata);
+  return 0;
+}
+
+int compressionWriter(char * token, int fd){
+  //TODO change the way tab and newline and stuff is read into the table
+  //store the current node
+  struct huffNode * curr;
+  //calculate the hash code
+  int sum = 0;
+  //loop through the characters of the token
+  for (int k = 0; k < strlen(token); k++){
+    //calculate the ascii sum of the token
+    sum = sum + (int)token[k];
+  }
+  //mod it to fit inside the 256 length array
+  int index = sum % 256;
+  //error check the index
+  if(index < 0){
+    //make the index positive
+    index *= -1;
+  }
+  //check to see if the head node of the given index is Null
+  if(hashTable[index] == NULL){
+    //there is an error
+    printf("FATAL ERROR: Codebook mismatch");
+    //exit this badboy
+    exit(0);
+  } else{
+    //gather the current node
+    curr = hashTable[index];
+    //we need to traverse and find the bitcode
+    while(curr != NULL){
+      //check if the current node is our desired token
+      if(strcmp(curr->token, token) == 0){
+        //we need to write our bitcode
+        write(fd, curr->bittok, strlen(curr->bittok));
+      }
+    }
+  }
+  return 1;
 }
 
 /* Read the given file descriptor and write each item to the huffman table */
@@ -319,6 +549,7 @@ int huffmanCodebookReader (int fileDescriptor){
     }
   }
   huffTokenizer(myBuffer, readIn);
+  return 0;
 }
 
 
@@ -347,107 +578,137 @@ int huffTokenizer (char *buff, int buffSize){
   int bSize = 10;
   //loop through the string until we hit a terminator which means end of the buffer and text file
   while(buff[counter] != '\0'){
+    //store the current value of the buffer at counter
     ctemp = buff[counter];
     //check if we have hit a newline
     if(ctemp == '\n') { 
     	// dont need to store empty tokens TODO: add this to the decompress method
-    	if(strcmp(bdata, "") != 0) {
-        //null terminate our bdata TODO:I left off here, debug tomorrow
-
+    	if(strcmp(cdata, "") != 0) {
+        //null terminate our bdata
+        cdata[localcount] = '\0';
         //insert our bitcode and token into the hashtable
     		hInsert(cdata, bdata);
-    		// reset all the badboys
+    		// allocate new space
     		cdata = (char *)malloc(11*sizeof(char));
     		bdata = (char *)malloc(11*sizeof(char)); 
+        //set the characters to null terminators
     		memset(cdata, '\0', 11);
     		memset(bdata, '\0', 11);
-        	currSize = 10;
-        	count = 0;
+        //reset the sizes with one space for the null terminator
+        bSize = 10;
+        cSize = 10;
     	}
+      //reset the local count
     	localcount = -1;
-    }
-    //check if we have hit a tab
-    else if(ctemp == '\t'){
+    } else if(ctemp == '\t'){ //check if we have hit a tab
+      //next we need the cdata
+      indicator = 1;
       //we don't need to store empty tokens
      	if(strcmp(cdata, "") != 0){
-        //allocate a new cdata for the next token
-        //reset the shit
-        currSize = 10;
-        count = 1; // count now set to 1 means we are working with BITCODE STRING now
+        //reset localCount and add the null terminator
+        bdata[localcount] = '\0';
       }
       //reset the local count
       localcount = -1;
       //dont need Adviths switch statements, huffman codebook formatted properly
-    }
-    if(count == 1) { // we are dealing with the bitcode
-    	if(localcount == currSize) {
-    		currSize += 10;
-    		temp = bdata;
-    		bdata = (char*)malloc(currSize*sizeof(char));
-    		if(bdata == NULL) {
+    } else if(indicator) { // we are dealing with the token
+    	if(localcount >= cSize) {
+    		//temporarily relocate the existing characters
+    		temp = cdata;
+        //allocate more space for the token
+    		cdata = (char*)malloc((cSize+10)*sizeof(char));
+        //checks make sure there is space
+    		if(cdata == NULL) {
+          //there's no space
     			printf("ERROR: Not enough space on heap\n");
+          //exit our code
+          exit(0);
     		}
-    		memset(bdata, '\0', currSize);
-    		memcpy(bdata,temp,localcount);
+        //increase the space used by our token
+        cSize += 11;
+        //set the token to null terminators
+    		memset(cdata, '\0', cSize);
+        //copy the temp stuff back into our cdata
+    		memcpy(cdata, temp, localcount);
+        //TODO: remember to free temp in the decompress tokenizer
     		free(temp);
-    		bdata[localcount] = buff[counter];
     	}
-    	else {
-    		bdata[localcount] = buff[counter];
+      //continue filling up cdata
+      cdata[localcount] = buff[counter];
+    } else if(!indicator){ // we are dealing with the bitcode
+    	if(localcount >= bSize) {
+    		//temporarily relocate the existing numbers
+    		temp = bdata;
+        //allocate more space for the bitcode
+    		bdata = (char*)malloc((bSize+10)*sizeof(char));
+        //checks make sure there is space
+    		if(bdata == NULL) {
+          //there's no space
+    			printf("ERROR: Not enough space on heap\n");
+          //exit our code
+          exit(0);
+    		}
+        //increase the space used by our token
+        bSize += 11;
+        //set the token to null terminators
+    		memset(bdata, '\0', bSize);
+        //copy the temp stuff back into our cdata
+    		memcpy(bdata, temp, localcount);
+        //TODO: remember to free temp in the decompress tokenizer
+    		free(temp);
     	}
-
-    }
-    else { // we are dealing with the token
-    	if(localcount == currSize){
-     	currSize += 10;
-      	temp = cdata;
-      	cdata = (char *)malloc(currSize*sizeof(char));
-      	if(cdata == NULL){
-        	printf("ERROR: Not enough space on heap\n");
-      	}
-      	memset(cdata, '\0', currSize);
-      	memcpy(cdata, temp, localcount);
-      	free(temp);
-      	cdata[localcount] = buff[counter];
-    	} 
-    	else {
-      	//store the buffer character into the cdata character
-      	cdata[localcount] = buff[counter];
-    	}
-	}
-    //increment counters
-    counter++;
-    localcount++;
+      //continue reading the bitcode
+      bdata[localcount] = buff[counter];
+	  }
+  //increment counters
+  counter++;
+  localcount++;
   }
   return 0;
 }
 
-/* this method will take the token and bitcode of the token and make a node for it and insert it into the hashtable
+/* this method will take the token and bitcode of the token and make a node for it and insert it into the hashtable */
 int hInsert (char * name, char * bitname) {
+  //store the hashcode
 	int sum = 0;
+  //store the newnode
+  struct huffNode * newNode;
+  //for LL traversal
+  struct huffNode * temp;
+  //calculate the hashcode
 	for (int i = 0; i < strlen(name); i++){
-    	sum = sum + (int)name[i];
+    sum += (int)name[i];
 	}
+  //calculate the index by modding the hashcode
 	int index = sum % 256;
-	if(tbl[index] == NULL) { // table is empty
-		struct huffNode * new = (struct huffNode *)malloc(sizeof(struct huffNode));
-		new->token = name;
-		new->bittok = bitname;
-    tbl[index] = new;
+  //check if the index is negative and make it positive
+  if(index < 0){
+    index *= -1;
+  }
+  //check if the hashtable at said index is empty
+	if(hashTable[index] == NULL) {
+    //TODO: edit my initial hashtable method to reflect the changes create a new node and put er in there
+    newNode = (struct huffNode *)malloc(sizeof(struct huffNode));
+    //populate the node's values
+    newNode -> token = name;
+    newNode -> bittok = bitname;
+    newNode -> next = NULL;
+    //we finished the insertion
     return 0;
-	}
-	else {
-		struct huffNode * temp = tbl[index];
-		while (temp -> next != NULL) {
-			temp = temp->next;
-		}
-		temp->next = (struct huffNode *)malloc(sizeof(struct huffNode));
-		temp->next->token = name;
-		temp->next->bittok = bitname;
+	} else {
+    //we need to traverse a linkedlist TODO: Also edit my initial hashtable method
+		temp = huffmanTable[index];
+    //make newNode the new head of the linked list at the index
+		newNode = (struct huffNode *)malloc(sizeof(struct huffNode));
+    newNode -> token = name;
+    newNode -> bittok = bitname;
+		newNode->next = temp;
+    //make newnode the new head
+    huffmanTable[index] = newNode;
+    // we finished the insertion
     return 0;
 	}
 }
-*/
 
 /* Reads the given file and loads it into a local buffer */
 int codebookReader (int fileDescriptor){
