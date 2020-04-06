@@ -52,6 +52,10 @@ int readHcz(int, int);
 int huffmanCodebookReader (int);
 int huffTokenizer (char *, int);
 int hInsert (char *, char *);
+int compressionFileReader (int, int);
+int compressionWriter(char *, int);
+int savTokenizer (char *, int, int);
+int compressFiles(int);
 int depthFirstSearch(struct node *, int, char *);
 
 //heap represented as an array with its capacity
@@ -77,6 +81,7 @@ struct node * hashTable[256];
 struct huffNode * huffmanTable[256];
 struct heap * myHeap;
 struct node * huffHead;
+char escapeChar;
 
 /* The brains of the operation */
 int main (int argc, char ** argv){
@@ -167,7 +172,7 @@ int main (int argc, char ** argv){
       //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
       int codFD = open("HuffmanCodebook", O_TRUNC | O_RDWR | O_CREAT,  S_IRUSR | S_IWUSR);
       //write the escape character being used
-      write(codFD, "$ \n", 3);
+      write(codFD, "$\n", 2);
       //call the DFS to calculate the huffman codes
       depthFirstSearch(huffHead, codFD, "");
       //close the file descriptor once we're done writing
@@ -276,6 +281,8 @@ int main (int argc, char ** argv){
       i++;
       //create a hashtable which stores the values of the huffman codebook
       huffmanCodebookReader(huffFD);
+      //compress the files in our files array
+      compressFiles(fileCounter);
     }
   }
   //release the files!
@@ -288,7 +295,6 @@ int main (int argc, char ** argv){
 int compressFiles(int numOfFiles){
   //counter and other stuff
   int i;
-  char filePath[PATH_MAX+1];
   char fileType[4];
   char newFilePath[PATH_MAX+1];
   int length;
@@ -304,9 +310,6 @@ int compressFiles(int numOfFiles){
     }
     //split the path and type
     strncpy(fileType, &files[i][length-4], 4);
-    strncpy(filePath, files[i], length-4);
-    //we need to add a null terminator to the filepath
-    filePath[length-4] = '\0';
     //check if the file is an hcz file and skip if it is
     if(strcmp(fileType, ".hcz") != 0){
       //open the huffman codebook file
@@ -314,7 +317,7 @@ int compressFiles(int numOfFiles){
       //copy the files[i] into the newfilepath
       strcpy(newFilePath, files[i]);
       //concatenate the .hcz onto the new file path
-      strcat(newFilePath, ".hcz");
+      strcat(newFilePath, ".hcz\0");
       //also open the file descriptor to write
       writefd = open(newFilePath, O_TRUNC | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
       //read the file
@@ -372,7 +375,7 @@ int compressionFileReader (int fileDescriptor, int writeFD){
     }
   }
   //TODO: delete, this is only for testing purposes
-  printf("%s", myBuffer);
+  //printf("%s", myBuffer);
   //we hand over the contents of our file (stored in buffer) to the table loader function
   savTokenizer(myBuffer, buffSize, writeFD);
   //finish it
@@ -461,7 +464,11 @@ int savTokenizer (char *buff, int buffSize, int writeFD){
     counter++;
     localcount++;
   }
-  loader(cdata);
+  //we have reached the end put the last guy in there
+  if(buff[counter] == '\0'){
+    //isolate the token and insert it into the table
+    compressionWriter(cdata, writeFD);
+  }
   return 0;
 }
 
@@ -471,8 +478,9 @@ int compressionWriter(char * token, int fd){
   struct huffNode * curr;
   //calculate the hash code
   int sum = 0;
+  int k;
   //loop through the characters of the token
-  for (int k = 0; k < strlen(token); k++){
+  for (k = 0; k < strlen(token); k++){
     //calculate the ascii sum of the token
     sum = sum + (int)token[k];
   }
@@ -484,21 +492,25 @@ int compressionWriter(char * token, int fd){
     index *= -1;
   }
   //check to see if the head node of the given index is Null
-  if(hashTable[index] == NULL){
+  if(huffmanTable[index] == NULL){
     //there is an error
     printf("FATAL ERROR: Codebook mismatch");
     //exit this badboy
     exit(0);
   } else{
     //gather the current node
-    curr = hashTable[index];
+    curr = huffmanTable[index];
     //we need to traverse and find the bitcode
     while(curr != NULL){
       //check if the current node is our desired token
       if(strcmp(curr->token, token) == 0){
         //we need to write our bitcode
         write(fd, curr->bittok, strlen(curr->bittok));
+        //break the loop once we are done
+        break;
       }
+      //make sure to traverse through the whole damn list
+      curr = curr -> next;
     }
   }
   return 1;
@@ -555,8 +567,15 @@ int huffmanCodebookReader (int fileDescriptor){
 
 /*this method will be for going through the huffman codebook*/
 int huffTokenizer (char *buff, int buffSize){
+  //check to see that we have shit in the buffer
+  if(buffSize == 0){
+    //print an error
+    printf("WARNING: Empty codebook");
+  }
+  //set the escape character
+  escapeChar = buff[0];
   //counter to loop through the buffer
-  int counter = 0;
+  int counter = 2;
   //counter to loop through the cdata
   int localcount = 0;
   char ctemp;
@@ -576,6 +595,8 @@ int huffTokenizer (char *buff, int buffSize){
   //initial sizes
   int cSize = 10;
   int bSize = 10;
+  //skip the first line of the huffman codebook
+  counter += 2;
   //loop through the string until we hit a terminator which means end of the buffer and text file
   while(buff[counter] != '\0'){
     //store the current value of the buffer at counter
@@ -597,6 +618,8 @@ int huffTokenizer (char *buff, int buffSize){
         //reset the sizes with one space for the null terminator
         bSize = 10;
         cSize = 10;
+        //flip indicator back
+        indicator = 0;
     	}
       //reset the local count
     	localcount = -1;
@@ -632,7 +655,25 @@ int huffTokenizer (char *buff, int buffSize){
     		memcpy(cdata, temp, localcount);
         //TODO: remember to free temp in the decompress tokenizer
     		free(temp);
-    	}
+    	} 
+      //check the escaping character
+      if(ctemp == escapeChar){
+        //we have three possibilities for the next character
+        if(buff[counter+1] == 'n'){
+          //store the newline character in cdata
+          cdata[0] = '\n';
+          //skip the next charater
+          counter++;
+        } else if(buff[counter+1] == '\n'){
+          //store the space character in cdata
+          cdata[0] = ' ';
+        } else if(buff[counter+1] == 't'){
+          //store the tab character in cdata
+          cdata[0] = '\t';
+          //skip the next char
+          counter++;
+        }
+      }
       //continue filling up cdata
       cdata[localcount] = buff[counter];
     } else if(!indicator){ // we are dealing with the bitcode
@@ -671,12 +712,13 @@ int huffTokenizer (char *buff, int buffSize){
 int hInsert (char * name, char * bitname) {
   //store the hashcode
 	int sum = 0;
+  int i;
   //store the newnode
   struct huffNode * newNode;
   //for LL traversal
   struct huffNode * temp;
   //calculate the hashcode
-	for (int i = 0; i < strlen(name); i++){
+	for (i = 0; i < strlen(name); i++){
     sum += (int)name[i];
 	}
   //calculate the index by modding the hashcode
@@ -686,13 +728,15 @@ int hInsert (char * name, char * bitname) {
     index *= -1;
   }
   //check if the hashtable at said index is empty
-	if(hashTable[index] == NULL) {
+	if(huffmanTable[index] == NULL) {
     //TODO: edit my initial hashtable method to reflect the changes create a new node and put er in there
     newNode = (struct huffNode *)malloc(sizeof(struct huffNode));
     //populate the node's values
     newNode -> token = name;
     newNode -> bittok = bitname;
     newNode -> next = NULL;
+    //now assign the head of the particular index to the huffman table
+    huffmanTable[index] = newNode;
     //we finished the insertion
     return 0;
 	} else {
@@ -1292,11 +1336,8 @@ void freeFiles(int numberOfFiles){
 int buildCodebook (int filesSize){
   //random local variables
   int counter;
-  char * temp;
   //loop through the files array
   for(counter = 0; counter < filesSize; counter++){
-    //check out the working file path
-    temp = files[counter];
     //open the file at the specific index to a read only mode
     int fd = open(files[counter], O_RDONLY);
     //check is the given file exists
@@ -1362,7 +1403,7 @@ int fileReader (int fileDescriptor){
     }
   }
   //TODO: delete, this is only for testing purposes
-  printf("%s", myBuffer);
+  //printf("%s", myBuffer);
   //we hand over the contents of our file (stored in buffer) to the table loader function
   tokenizer(myBuffer, buffSize);
   //finish it
@@ -1459,11 +1500,11 @@ int tokenizer (char *buff, int buffSize){
 
 /* for every token find its hash code and insert it into the table accordingly */
 int tableInsert(char *token){
-
   //calculate the hash code
   int sum = 0;
+  int k;
   //loop through the characters of the token
-  for (int k = 0; k < strlen(token); k++){
+  for (k = 0; k < strlen(token); k++){
     //calculate the ascii sum of the token
     sum = sum + (int)token[k];
   }
