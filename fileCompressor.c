@@ -600,7 +600,7 @@ int savTokenizer (char *buff, int buffSize, int writeFD){
           compressionWriter("\n", writeFD);
           break;
       }
-    } else if(localcount == currSize){ //store the character in the node array but first check for overflow
+    } else if(localcount >= currSize){ //store the character in the node array but first check for overflow
       //make the cdata array 10 characters bigger
       currSize += 10;
       //store the old values in the temp pointer
