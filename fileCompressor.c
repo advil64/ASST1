@@ -826,6 +826,8 @@ void buildHuffTree(char * myBook, int buffSize){
   int t = 0;
   int indicator = 0;
   int localCount = 0;
+  //store the escape character
+  escapeChar = myBook[0];
   //we need to skip to the meat of the notebook 
   while(myBook[t] != '\n'){
     //just keep incrementing i
@@ -876,8 +878,28 @@ void buildHuffTree(char * myBook, int buffSize){
         //move the temp stuff back into token
         memcpy(token, temp, tokenSize-100);
       }
-      //find the token
-      token[localCount] = myBook[i];
+      //check the escaping character
+      if(myBook[i] == escapeChar){
+        //we have three possibilities for the next character
+        if(myBook[i+1] == 'n'){
+          //store the newline character in cdata
+          token[0] = '\n';
+          //skip the next charater
+          i++;
+        } else if(myBook[i+1] == '\n'){
+          //store the space character in cdata
+          token[0] = ' ';
+        } else if(myBook[i+1] == 't'){
+          //store the tab character in cdata
+          token[0] = '\t';
+          //skip the next char
+          i++;
+        }
+      } else{
+        //find the token
+        token[localCount] = myBook[i];
+      }
+      //in any case, increment the local count
       localCount++;
     }
   }
