@@ -81,21 +81,25 @@ struct node * hashTable[256];
 struct huffNode * huffmanTable[256];
 struct heap * myHeap;
 struct node * huffHead;
-char escapeChar;
+char * escapeSequence;
 
 /* The brains of the operation */
 int main (int argc, char ** argv){
-
-  //booleans indicating flags
+  //booleans indicating flags the -b flag was passed
   int build = 0;
+  //the -R flag was passed
   int recursive = 0;
+  //the -c flag was passed
   int compress = 0;
+  //the -d flag was passed
   int decompress = 0;
   //counter for the loop
   int i = 0;
+  //stores the number of files given
   int fileCounter;
   //loop through the arguments
   for(i = 0; i < argc; i++){
+    //check the flags / set the flags
     if(strcmp(argv[i], "-b") == 0){
       //set the build flag to be true
       build = 1;
@@ -109,25 +113,32 @@ int main (int argc, char ** argv){
       //we need to decompress the given file
       decompress = 1;
     } else if(build){
+      //first check that you don't have an additional argument
+      if(i != argc-1){
+        //you should only pass in at most 3 arguments for the build codebook part
+        printf("WARNING: No need to pass the Huffman Codebook for -b, did you mean to -c or -d instead?\n");
+        //exit this mofo
+        exit(0);
+      }
       //we're building a hash table, memset that mofo
       memset(hashTable, 0x0, 256*sizeof(struct node *));
       //check if we have to traverse multiple files
       if(recursive){
         //make space in the files array
         files = (char **) malloc(100 * sizeof(char *));
-        //check is the given file exists
+        //check is the given file exists (we ran out of memory)
         if(!files){
           //file does not exist it is a fatal error
           printf("FATAL ERROR: Not enough memory\n");
           //exit the code
-          exit(1);
+          exit(0);
         }
         //open the directory stream
         DIR *myDirec = opendir(argv[i]);
         //check is the given file exists
         if(!myDirec){
           //file does not exist it is a fatal error
-          printf("FATAL ERROR: Directory does not exist\n");
+          printf("FATAL ERROR: Directory does not exist, please use -b flag ONLY if your argument is a file\n");
           //exit the code
           exit(1);
         }
@@ -143,7 +154,7 @@ int main (int argc, char ** argv){
           //file does not exist it is a fatal error
           printf("FATAL ERROR: Not enough memory\n");
           //exit the code
-          exit(1);
+          exit(0);
         }
         //the only file
         files[0] = argv[i];
@@ -151,33 +162,71 @@ int main (int argc, char ** argv){
         fileCounter = 1;
       }
       //we need to build the huffman codebook
-      buildCodebook(fileCounter);
-      //TODO: delete this in final iteration of project
-      //printTable();
+      if(buildCodebook(fileCounter)){
+        //1 is unsuccessful, and zero is successfull
+        printf("FATAL ERROR: Unable to build codebook\n");
+        //exit
+        exit(0);
+      }
       //after building the hashtable, we need to store everything in a heap
       myHeap = (struct heap *)malloc(sizeof(struct heap));
-      //start with an initial capacity of 100
+      //check for memory capacity
+      if(!myHeap){
+        //file does not exist it is a fatal error
+        printf("FATAL ERROR: Not enough memory\n");
+        //exit the code
+        exit(0);
+      }
+      //start with an initial capacity of 101
       myHeap -> arr = (struct node **)malloc(101*sizeof(struct node *));
+      //check for memory capacity
+      if(!(myHeap->arr)){
+        //file does not exist it is a fatal error
+        printf("FATAL ERROR: Not enough memory\n");
+        //exit the code
+        exit(0);
+      }
+      //the array initially has 100 spaces with 1 space hidden
       myHeap -> cap = 100;
+      //set all the elements to null just in case
       memset(myHeap -> arr, 0x0, (myHeap -> cap)*sizeof(struct node *));
+      //the heap is initially empty
       myHeap -> used = 0;
       //we need to transfer the hashtable into the heap
-      heapTransfer();
-      //TODO: remove this before submission
-      //printHeap();
+      if(heapTransfer()){
+        //transfering hashtable into the minheap was unsuccessfull
+        printf("FATAL ERROR: Transfering hashtable into the minheap was unsuccessfull\n");
+        //exit
+        exit(0);
+      }
       //now we need to start building the Huffman Tree
-      buildSubTrees();
-      //TODO: remove this before submission
-      //printHeap();
-      //once the subtrees are built, we need ot write to a huffman codebook, FIRST CREATE a codebook file
+      if(buildSubTrees()){
+        //build subtrees was unsuccessful
+        printf("FATAL ERROR: Building subtrees was unsuccessful\n");
+        //exit
+        exit(0);
+      }
+      //once the subtrees are built, we need to write to a huffman codebook, FIRST CREATE a codebook file
       int codFD = open("HuffmanCodebook", O_TRUNC | O_RDWR | O_CREAT,  S_IRUSR | S_IWUSR);
+      //creating the file is unsuccessfull
+      if(codFD < 0){
+        //unable to open the codebook for whatever reason
+        printf("FATAL ERROR: Unable to open the huffman codebook file\n");
+      }
       //write the escape character being used
-      write(codFD, "$\n", 2);
+      write(codFD, "!@#$^&*\n", 8);
       //call the DFS to calculate the huffman codes
       depthFirstSearch(huffHead, codFD, "");
       //close the file descriptor once we're done writing
       close(codFD);
     } else if(decompress){
+      //first makesure that you have a codebook argument
+      if(i == argc-1){
+        //there is no huffman codebook argument
+        printf("ERROR: to use the decompress flag you must provide a huffman codebook\n");
+        //exit this sucker
+        exit(0);
+      }
       //check out how we're traversing this directory
       if(recursive){
         //make space in the files array
@@ -187,16 +236,16 @@ int main (int argc, char ** argv){
           //file does not exist it is a fatal error
           printf("FATAL ERROR: Not enough memory\n");
           //exit the code
-          exit(1);
+          exit(0);
         }
         //open the directory stream
         DIR *myDirec = opendir(argv[i]);
         //check is the given file exists
         if(!myDirec){
           //file does not exist it is a fatal error
-          printf("FATAL ERROR: Directory does not exist\n");
+          printf("FATAL ERROR: Directory does not exist, please use -b flag ONLY if your argument is a file\n");
           //exit the code
-          exit(1);
+          exit(0);
         }
         //pass along the file directory to the traversal method which stores the files
         fileCounter = direcTraverse(myDirec, 0, 100, argv[i]);
@@ -210,7 +259,7 @@ int main (int argc, char ** argv){
           //file does not exist it is a fatal error
           printf("FATAL ERROR: Not enough memory\n");
           //exit the code
-          exit(1);
+          exit(0);
         }
         //the only file
         files[0] = argv[i];
@@ -218,24 +267,46 @@ int main (int argc, char ** argv){
         fileCounter = 1;
       }
       //open the codebook
-      int cdFd = open(argv[i+1], O_RDONLY);
+      int cdFd = open(argv[++i], O_RDONLY);
       //make a warning if it's not correct
       if(cdFd < 0){
         //codebook not present
-        printf("Warning: Codebook not present");
+        printf("WARNING: Codebook not present\n");
       }
-      //increment i so we don't reread the codebook
-      i++;
-      //allocate the parent node for the huffman tree
+      //allocate the parent node for the huffman tree TODO: free this tree
       huffHead = (struct node *)malloc(sizeof(struct node));
+      //check for memory
+      if(!huffHead){
+        //codebook not present
+        printf("FATAL ERROR: Not enough memory\n");
+      }
+      //recreating the huffman tree, make both children null
       huffHead -> rChild = NULL;
       huffHead -> lChild = NULL;
-      huffHead ->identifier = 0;
       //we need to build the huffman tree
-      codebookReader(cdFd);
-      //call the decompress files method and pass in the files counter
-      decompressFiles(fileCounter);
+      if(codebookReader(cdFd)){
+        //we were unable to read the codebook
+        printf("FATAL ERROR: Unable to read the huffman codebook\n");
+        //exit
+        exit(0);
+      }
+      //decompress files reads our file(s) and converts back into regular text
+      if(decompressFiles(fileCounter)){
+        //we were unable to read the codebook
+        printf("FATAL ERROR: Unable to read the decompress files\n");
+        //exit
+        exit(0);
+      }
+      //close the file descriptor used to read the codebook
+      close(cdFd);
     } else if(compress){
+      //first makesure that you have a codebook argument
+      if(i == argc-1){
+        //there is no huffman codebook argument
+        printf("ERROR: to use the decompress flag you must provide a huffman codebook\n");
+        //exit this sucker
+        exit(0);
+      }
       //check out how we're traversing this directory
       if(recursive){
         //make space in the files array
@@ -276,13 +347,29 @@ int main (int argc, char ** argv){
         fileCounter = 1;
       }
       // declaring file descriptor for Huffman Codebook
-  	  int huffFD = open(argv[i+1], O_RDONLY);
-      //add one to avoid reading the codebook again
-      i++;
+  	  int huffFD = open(argv[++i], O_RDONLY);
+      //check to see if huffman codebook exists
+      if(huffFD < 0){
+        printf("FATAL ERROR: Unable to open given codebook file\n");
+        //exit the code
+        exit(0);
+      }
       //create a hashtable which stores the values of the huffman codebook
-      huffmanCodebookReader(huffFD);
+      if(huffmanCodebookReader(huffFD)){
+        //print an error
+        printf("ERROR: Unable to read given codebook file\n");
+        //exit the code
+        exit(0);
+      }
       //compress the files in our files array
-      compressFiles(fileCounter);
+      if(compressFiles(fileCounter)){
+        //print an error
+        printf("ERROR: Unable to compress given file(s)\n");
+        //exit the code
+        exit(0);
+      }
+      //close the huffman codebook file descriptor
+      close(huffFD);
     }
   }
   //release the files!
@@ -291,44 +378,75 @@ int main (int argc, char ** argv){
   return 0;
 }
 
-/* this method traverses the files array and compresses all of them */
+/* this method traverses the files array and compresses all of them returns 0 on success*/
 int compressFiles(int numOfFiles){
-  //counter and other stuff
+  //loop counter
   int i;
+  //stores the file extension of the current file (used to skip .hcz files)
   char fileType[4];
+  //stores the file path of the .hcz file
   char newFilePath[PATH_MAX+1];
+  //stores the length of the current file
   int length;
+  //file descriptor opens the current file
   int fd;
+  //file descriptor opens the current .hcz file
   int writefd;
   //loop through the files and skip the ones not compressed already
   for(i = 0; i < numOfFiles; i++){
     //calculate the index of the point
     length = strlen(files[i]);
-    //check to see if the path is even valid
-    if(length < 5){
-      continue;
+    //first check if the string is less than 5 characters long
+    if(length > 4){
+      //extract the file extension from the path
+      strncpy(fileType, &files[i][length-4], 4);
+      //check if the file is an hcz file and skip if it is
+      if(strcmp(fileType, ".hcz") == 0){
+        //if this is the only file, we want to return an error
+        if(numOfFiles == 1){
+          //returning 1 will triger a print in the main method
+          return 1;
+        }
+        //skip this file
+        continue;
+      }
     }
-    //split the path and type
-    strncpy(fileType, &files[i][length-4], 4);
-    //check if the file is an hcz file and skip if it is
-    if(strcmp(fileType, ".hcz") != 0){
-      //open the huffman codebook file
-      fd = open(files[i], O_RDONLY);
-      //copy the files[i] into the newfilepath
-      strcpy(newFilePath, files[i]);
-      //concatenate the .hcz onto the new file path
-      strcat(newFilePath, ".hcz\0");
-      //also open the file descriptor to write
-      writefd = open(newFilePath, O_TRUNC | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
-      //read the file
-      compressionFileReader(fd, writefd);
+    //open the uncompressed file
+    fd = open(files[i], O_RDONLY);
+    //check to see if there was trouble opening the file
+    if(fd < 0){
+      //print error
+      printf("ERROR: Unable to open the %dth uncompressed file\n", i);
+      //exit in style
+      exit(0);
     }
+    //copy the files[i] into the newfilepath
+    strcpy(newFilePath, files[i]);
+    //concatenate the .hcz onto the new file path
+    strcat(newFilePath, ".hcz\0");
+    //also open the file descriptor to write
+    writefd = open(newFilePath, O_TRUNC | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+    //check to see if there was trouble opening the file
+    if(writefd < 0){
+      //print error
+      printf("ERROR: Unable to open the .hcz for the %dth uncompressed file\n", i);
+      //exit in style
+      exit(0);
+    }
+    //read the file
+    if(compressionFileReader(fd, writefd)){
+      //error while trying to compress a file
+      printf("ERROR: Unable to compress file %d\n", i);
+    }
+    //close both file descriptors once we are done using them
+    close(fd);
+    close(writefd);
   }
-  //return i
-  return i;
+  //we were successfull
+  return 0;
 }
 
-/* Reads the given file and loads it into a local buffer */
+/* Reads the given file and loads it into a local buffer calls sav tokenizer afterwards*/
 int compressionFileReader (int fileDescriptor, int writeFD){
   //buffer size
   int buffSize = 100;
@@ -365,19 +483,24 @@ int compressionFileReader (int fileDescriptor, int writeFD){
       if(myBuffer == NULL){
         //print an error
         printf("ERROR: Not enough space on heap\n");
+        //exit
+        return 1;
       }
       //set everything in the buffer to the null terminator
       memset(myBuffer, '\0', buffSize);
       //copy the old memory into the new buffer
       memcpy(myBuffer, temp, readIn);
-      //free the old memory that was allocated
+      //free the old memory that was allocated temporarily
       free(temp);
     }
   }
-  //TODO: delete, this is only for testing purposes
-  //printf("%s", myBuffer);
   //we hand over the contents of our file (stored in buffer) to the table loader function
-  savTokenizer(myBuffer, buffSize, writeFD);
+  if(savTokenizer(myBuffer, buffSize, writeFD)){
+    //print the error
+    printf("ERROR: While trying to tokenize the file\n");
+    //there was an error in the tokenizer
+    return 1;
+  }
   //finish it
   return 0;
 }
@@ -389,14 +512,18 @@ int savTokenizer (char *buff, int buffSize, int writeFD){
   int counter = 0;
   //counter to loop through the cdata
   int localcount = 0;
+  //store the current character
   char ctemp;
   //allocate starting space into cdata
   char *cdata = (char *)malloc(11*sizeof(char));
+  //temp when you need to expand the string tokens
   char *temp;
   //check if the pointer is null
   if(cdata == NULL){
     //print an error
     printf("ERROR: Not enough space on heap\n");
+    //return unsuccessfull
+    return 1;
   }
   //set the array to be all null terminators
   memset(cdata, '\0', 11);
@@ -404,8 +531,9 @@ int savTokenizer (char *buff, int buffSize, int writeFD){
   int currSize = 10;
   //loop through the string until we hit a comma or terminator
   while(buff[counter] != '\0'){
+    //get the current character at every iteration
     ctemp = buff[counter];
-    //check if we have hit a space
+    //check if we have hit a control character
     if(ctemp == '\t' || ctemp == ' ' || ctemp == '\n'){
       //we don't need to store empty tokens
       if(strcmp(cdata, "") != 0){
@@ -434,9 +562,7 @@ int savTokenizer (char *buff, int buffSize, int writeFD){
           compressionWriter("\n", writeFD);
           break;
       }
-    }
-    //store the character in the node array
-    else if(localcount == currSize){
+    } else if(localcount == currSize){ //store the character in the node array but first check for overflow
       //make the cdata array 10 characters bigger
       currSize += 10;
       //store the old values in the temp pointer
@@ -447,6 +573,8 @@ int savTokenizer (char *buff, int buffSize, int writeFD){
       if(cdata == NULL){
         //print an error
         printf("ERROR: Not enough space on heap\n");
+        //return an error
+        return 1;
       }
       //set the random stuff to null terminators again
       memset(cdata, '\0', currSize);
@@ -469,15 +597,19 @@ int savTokenizer (char *buff, int buffSize, int writeFD){
     //isolate the token and insert it into the table
     compressionWriter(cdata, writeFD);
   }
+  //free the original character buffer before leaving
+  free(buff);
+  //return success!
   return 0;
 }
 
+/*given the token and the file descriptor, this method writes the token's bitcode to the file descriptor*/
 int compressionWriter(char * token, int fd){
-  //TODO change the way tab and newline and stuff is read into the table
   //store the current node
   struct huffNode * curr;
   //calculate the hash code
   int sum = 0;
+  //index
   int k;
   //loop through the characters of the token
   for (k = 0; k < strlen(token); k++){
@@ -494,7 +626,7 @@ int compressionWriter(char * token, int fd){
   //check to see if the head node of the given index is Null
   if(huffmanTable[index] == NULL){
     //there is an error
-    printf("FATAL ERROR: Codebook mismatch");
+    printf("ERROR: Codebook mismatch\n");
     //exit this badboy
     exit(0);
   } else{
@@ -513,7 +645,8 @@ int compressionWriter(char * token, int fd){
       curr = curr -> next;
     }
   }
-  return 1;
+  //success!
+  return 0;
 }
 
 /* Read the given file descriptor and write each item to the huffman table */
@@ -526,6 +659,8 @@ int huffmanCodebookReader (int fileDescriptor){
   if(myBuffer == NULL){
     //print an error
     printf("ERROR: Not enough space on heap\n");
+    //we were unsuccessful
+    return 1;
   }
   //set everything in the buffer to the null terminator
   memset(myBuffer, '\0', 101);
@@ -550,9 +685,11 @@ int huffmanCodebookReader (int fileDescriptor){
       //malloc the new array to myBuffer
       myBuffer = (char *)malloc(buffSize*sizeof(char));
       //check if the pointer is null
-      if(temp == NULL){
+      if(myBuffer == NULL){
         //print an error
         printf("ERROR: Not enough space on heap\n");
+        //we were unnseccufl
+        return 1;
       }
       //copy the old memory into the new buffer
       memcpy(myBuffer, temp, readIn);
@@ -560,20 +697,31 @@ int huffmanCodebookReader (int fileDescriptor){
       free(temp);
     }
   }
-  huffTokenizer(myBuffer, readIn);
+  //we need to split the buffer into tokens
+  if(huffTokenizer(myBuffer, readIn)){
+    //there was an error
+    printf("ERROR: Unable to tokenize given codebook\n");
+    //return unsuccessful
+    return 1;
+  }
+  //free the buffer once it has been broken into tokens
+  free(myBuffer);
+  //success!
   return 0;
 }
-
 
 /*this method will be for going through the huffman codebook*/
 int huffTokenizer (char *buff, int buffSize){
   //check to see that we have shit in the buffer
   if(buffSize == 0){
     //print an error
-    printf("WARNING: Empty codebook");
+    printf("WARNING: Empty codebook\n");
+    //return unsuccessfull
+    return 1;
   }
-  //set the escape character
-  escapeChar = buff[0];
+  //find the escaping sequence first allocate space for it
+  escapeSequence = (char *) malloc(11*sizeof(char));
+  //TODO: left off here loop through the characters until you hit the first new line
   //counter to loop through the buffer
   int counter = 2;
   //counter to loop through the cdata
@@ -1129,13 +1277,13 @@ struct node * pop(){
   return toPop;
 }
 
-/*sift down the new root until it is at the correct position*/
+/*TODO: fix for big files sift down the new root until it is at the correct position*/
 int siftDown(struct node * parent, int currPos){
   //calculate the potential positions
   int rPos = (currPos*2)+2;
   int lPos = (currPos*2)+1;
   //check if we are at the end of the heap
-  if(rPos > myHeap -> cap || lPos > myHeap -> cap){
+  while(rPos > myHeap -> cap || lPos > myHeap -> cap){
     //increase the heap size, this is unlikely tho
     increaseHeapSize();
   }
