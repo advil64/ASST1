@@ -1046,6 +1046,35 @@ int codebookReader (int fileDescriptor){
 
 /* traverse through the given huffman codebook */
 void buildHuffTree(char * myBook, int buffSize){
+  //check to see that we have shit in the buffer
+  if(buffSize == 0){
+    //print an error
+    printf("WARNING: Empty codebook\n");
+    //return unsuccessfull
+    exit(0);
+  }
+  //counters
+  int t = 0;
+  int indicator = 0;
+  int localCount = 0;
+  //find the escaping sequence first allocate space for it
+  escapeSequence = (char *) malloc(50*sizeof(char));
+  //throw an error in case this fails
+  if(!escapeSequence){
+    //print an ERROR
+    printf("FATAL ERROR: Not enough space on the heap/n");
+    //return unsuccessful
+    exit(0);
+  }
+  //memset the escape sequence to be null
+  memset(escapeSequence, '\0', 50);
+  //loop through the characters until you hit the first new line
+  while(myBook[t] != '\n'){
+    //store the characters in the escaping sequence one by one
+    escapeSequence[t] = myBook[t];
+    //increment the counter
+    t++;
+  }
   //store the path and token
   char currPath[PATH_MAX+1];
   //reset the path
@@ -1058,19 +1087,9 @@ void buildHuffTree(char * myBook, int buffSize){
   memset(token, '\0', 101);
   //initial token size
   int tokenSize = 100;
-  //counter
-  int t = 0;
-  int indicator = 0;
-  int localCount = 0;
-  //store the escape character
-  //escapeChar = myBook[0];
-  //we need to skip to the meat of the notebook 
-  while(myBook[t] != '\n'){
-    //just keep incrementing i
-    t++;
-  }
-  //add one for good luck!
-  t++;
+  //skip the fnewline char at the end of the first line
+  t ++;
+  //loop counter
   int i;
   //now traverse the codebook
   for(i = t; i < buffSize; i++){
@@ -1082,10 +1101,13 @@ void buildHuffTree(char * myBook, int buffSize){
       currPath[localCount] = '\0';
       localCount = 0;
     } else if(myBook[i] == '\n'){
-      //add a null terminator just in case
-      token[localCount] = '\0';
-      //insert the token into the appropriate spot of the huffman tree
-      huffInsert(currPath, token, huffHead);
+      //we don't want to insert empty tokens
+      if(strcmp(token, "") != 0){
+        //add a null terminator just in case
+        token[localCount] = '\0';
+        //insert the token into the appropriate spot of the huffman tree
+        huffInsert(currPath, token, huffHead);
+      }
       //flip the indicator back
       indicator = 0;
       //make a new token
@@ -1114,22 +1136,27 @@ void buildHuffTree(char * myBook, int buffSize){
         //move the temp stuff back into token
         memcpy(token, temp, tokenSize-100);
       }
-      //check the escaping character
-      if(myBook[i] == '$'){
-        //we have three possibilities for the next character
-        if(myBook[i+1] == 'n'){
+      //check the escaping sequence
+      if(myBook[i] == escapeSequence[localCount]){
+        //check to see if the rest of the escaping sequence is also present
+        if(strncmp(escapeSequence, &myBook[localCount], strlen(escapeSequence)) == 0){
+          //we need to escape sequence with one of the following
+          if(myBook[i+strlen(escapeSequence)] == 'n'){
           //store the newline character in cdata
           token[0] = '\n';
-          //skip the next charater
-          i++;
-        } else if(myBook[i+1] == '\n'){
+          //skip the rest of the escape sequence
+          i += strlen(escapeSequence);
+        } else if(myBook[i+strlen(escapeSequence)] == '\n'){
           //store the space character in cdata
           token[0] = ' ';
-        } else if(myBook[i+1] == 't'){
+          //skip the rest of the escape sequence
+          i += strlen(escapeSequence)-1;
+        } else if(myBook[i+strlen(escapeSequence)] == 't'){
           //store the tab character in cdata
           token[0] = '\t';
-          //skip the next char
-          i++;
+          //skip the rest of the escape sequence
+          i += strlen(escapeSequence);
+        }
         }
       } else{
         //find the token
@@ -1219,8 +1246,8 @@ int decompressFiles(int numOfFiles){
       readHcz(fd, writefd);
     }
   }
-  //return i
-  return i;
+  //success!
+  return 0;
 }
 
 /*Reads the given .hcz file*/
