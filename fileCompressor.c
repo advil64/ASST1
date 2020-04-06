@@ -217,8 +217,10 @@ int main (int argc, char ** argv){
         //unable to open the codebook for whatever reason
         printf("FATAL ERROR: Unable to open the huffman codebook file\n");
       }
+      //assign the value of the escape sequence
+      escapeSequence = "$\0";
       //write the escape character being used
-      write(codFD, "!@#$^&*\n", 8);
+      write(codFD, "$\n", 2);
       //call the DFS to calculate the huffman codes
       depthFirstSearch(huffHead, codFD, "");
       //close the file descriptor once we're done writing
@@ -1034,10 +1036,10 @@ int codebookReader (int fileDescriptor){
       free(temp);
     }
   }
-  //TODO: delete, this is only for testing purposes
-  //printf("%s", myBuffer);
   //we hand over the contents of our file (stored in buffer) to the table loader function
   buildHuffTree(myBuffer, buffSize);
+  //free the buffer once we're done using it
+  free(myBuffer);
   //finish it
   return 0;
 }
@@ -1050,6 +1052,7 @@ void buildHuffTree(char * myBook, int buffSize){
   memset(currPath, '\0', PATH_MAX+1);
   //malloc the token
   char * token = (char *)malloc(101*sizeof(char));
+  //temp for increasing the character size
   char * temp;
   //set tokens to null
   memset(token, '\0', 101);
@@ -1211,7 +1214,7 @@ int decompressFiles(int numOfFiles){
       //open the huffman codebook file
       fd = open(files[i], O_RDONLY);
       //also open the file descriptor to write
-      writefd = open(filePath, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+      writefd = open(filePath, O_TRUNC | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
       //pass it into the readHcz method to be read
       readHcz(fd, writefd);
     }
