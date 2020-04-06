@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <limits.h>
+#include <time.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -56,6 +57,7 @@ int compressionFileReader (int, int);
 int compressionWriter(char *, int);
 int savTokenizer (char *, int, int);
 int compressFiles(int);
+int freeHuffmanTable();
 int depthFirstSearch(struct node *, int, char *);
 
 //heap represented as an array with its capacity
@@ -85,6 +87,8 @@ char * escapeSequence;
 
 /* The brains of the operation */
 int main (int argc, char ** argv){
+  //TODO: delete in final iteration time measure
+  clock_t tic = clock();
   //booleans indicating flags the -b flag was passed
   int build = 0;
   //the -R flag was passed
@@ -370,11 +374,43 @@ int main (int argc, char ** argv){
       }
       //close the huffman codebook file descriptor
       close(huffFD);
+      //free the huffman table
+      freeHuffmanTable();
     }
   }
   //release the files!
   freeFiles(fileCounter);
+  clock_t toc = clock();
+  printf("Elapsed: %f seconds\n", (double)(toc - tic) / CLOCKS_PER_SEC);
   //we're done!
+  return 0;
+}
+
+/*Frees the Huffman Table*/
+int freeHuffmanTable(){
+  //traversal nodes 
+  struct huffNode * head;
+  struct huffNode * temp;
+  //looping index
+  int i;
+  //loop through the whole table
+  for(i = 0; i < 256; i++){
+    //assign the node at i to head
+    head = huffmanTable[i];
+    //loop through the table
+    while(head != NULL){
+      //assign temp to be the next
+      temp = head -> next;
+      //free the contents
+      free(head->token);
+      free(head->bittok);
+      //free the head
+      free(head);
+      //reassign head to temp
+      head = temp;
+    }
+  }
+  //return success
   return 0;
 }
 
@@ -656,7 +692,7 @@ int huffmanCodebookReader (int fileDescriptor){
   //create the buffer to store the file
   char *myBuffer = (char *)malloc(101*sizeof(char));
   //check if the pointer is null
-  if(myBuffer == NULL){
+  if(!myBuffer){
     //print an error
     printf("ERROR: Not enough space on heap\n");
     //we were unsuccessful
@@ -719,23 +755,43 @@ int huffTokenizer (char *buff, int buffSize){
     //return unsuccessfull
     return 1;
   }
-  //find the escaping sequence first allocate space for it
-  escapeSequence = (char *) malloc(11*sizeof(char));
-  //TODO: left off here loop through the characters until you hit the first new line
   //counter to loop through the buffer
-  int counter = 2;
+  int counter = 0;
   //counter to loop through the cdata
   int localcount = 0;
+  //find the escaping sequence first allocate space for it
+  escapeSequence = (char *) malloc(50*sizeof(char));
+  //throw an error in case this fails
+  if(!escapeSequence){
+    //print an ERROR
+    printf("FATAL ERROR: Not enough space on the heap/n");
+    //return unsuccessful
+    return 1;
+  }
+  //memset the escape sequence to be null
+  memset(escapeSequence, '\0', 50);
+  //loop through the characters until you hit the first new line
+  while(buff[counter] != '\n'){
+    //store the characters in the escaping sequence one by one
+    escapeSequence[counter] = buff[counter];
+    //increment the counter
+    counter++;
+  }
+  //this value stores the character at counter
   char ctemp;
+  //this value indicates wether we are reading a token or bit sequence
   int indicator = 0;
   //allocate starting space into cdata
   char *cdata = (char *)malloc(11*sizeof(char));
   char *bdata = (char *)malloc(11*sizeof(char));
+  //used temporarily for reallocing memory
   char *temp;
   //check if the pointer is null
   if(!cdata || !bdata){
     //print an error
-    printf("ERROR: Not enough space on heap\n");
+    printf("FATAL ERROR: Not enough space on heap\n");
+    //return unsuccessful
+    return 1;
   }
   //set the array to be all null terminators
   memset(cdata, '\0', 11);
@@ -743,8 +799,8 @@ int huffTokenizer (char *buff, int buffSize){
   //initial sizes
   int cSize = 10;
   int bSize = 10;
-  //skip the first line of the huffman codebook
-  counter += 2;
+  //skip the fnewline char at the end of the first line
+  counter ++;
   //loop through the string until we hit a terminator which means end of the buffer and text file
   while(buff[counter] != '\0'){
     //store the current value of the buffer at counter
@@ -756,7 +812,12 @@ int huffTokenizer (char *buff, int buffSize){
         //null terminate our bdata
         cdata[localcount] = '\0';
         //insert our bitcode and token into the hashtable
-    		hInsert(cdata, bdata);
+    		if(hInsert(cdata, bdata)){
+          //print an error
+          printf("ERROR: Unable to insert %s into our huffman table", cdata);
+          //return unnsuccessful
+          return 1;
+        }
     		// allocate new space
     		cdata = (char *)malloc(11*sizeof(char));
     		bdata = (char *)malloc(11*sizeof(char)); 
@@ -775,15 +836,18 @@ int huffTokenizer (char *buff, int buffSize){
       //next we need the cdata
       indicator = 1;
       //we don't need to store empty tokens
-     	if(strcmp(cdata, "") != 0){
-        //reset localCount and add the null terminator
-        bdata[localcount] = '\0';
+     	if(strcmp(bdata, "") == 0){
+        //we failed to read the bdata
+        printf("WARNING: Codebook formatted incorrectly\n");
+        //return unsuccessful
+        return 1;
       }
       //reset the local count
       localcount = -1;
       //dont need Adviths switch statements, huffman codebook formatted properly
     } else if(indicator) { // we are dealing with the token
-    	if(localcount >= cSize) {
+      //check to see if there is still space in the character array
+    	if(localcount >= cSize){
     		//temporarily relocate the existing characters
     		temp = cdata;
         //allocate more space for the token
@@ -792,8 +856,8 @@ int huffTokenizer (char *buff, int buffSize){
     		if(cdata == NULL) {
           //there's no space
     			printf("ERROR: Not enough space on heap\n");
-          //exit our code
-          exit(0);
+          //return unsuccessfull
+          return 1;
     		}
         //increase the space used by our token
         cSize += 11;
@@ -803,23 +867,28 @@ int huffTokenizer (char *buff, int buffSize){
     		memcpy(cdata, temp, localcount);
         //TODO: remember to free temp in the decompress tokenizer
     		free(temp);
-    	} 
-      //check the escaping character
-      if(ctemp == escapeChar){
-        //we have three possibilities for the next character
-        if(buff[counter+1] == 'n'){
+    	}
+      //check the escaping sequence
+      if(ctemp == escapeSequence[localcount]){
+        //check to see if the rest of the escaping sequence is also present
+        if(strncmp(escapeSequence, &buff[counter], strlen(escapeSequence)) == 0){
+          //we need to escape sequence with one of the following
+          if(buff[counter+strlen(escapeSequence)] == 'n'){
           //store the newline character in cdata
           cdata[0] = '\n';
-          //skip the next charater
-          counter++;
-        } else if(buff[counter+1] == '\n'){
+          //skip the rest of the escape sequence
+          counter += strlen(escapeSequence);
+        } else if(buff[counter+strlen(escapeSequence)] == '\n'){
           //store the space character in cdata
           cdata[0] = ' ';
-        } else if(buff[counter+1] == 't'){
+          //skip the rest of the escape sequence
+          counter += strlen(escapeSequence)-1;
+        } else if(buff[counter+strlen(escapeSequence)] == 't'){
           //store the tab character in cdata
           cdata[0] = '\t';
-          //skip the next char
-          counter++;
+          //skip the rest of the escape sequence
+          counter += strlen(escapeSequence);
+        }
         }
       } else{
         //continue filling up cdata
@@ -835,8 +904,8 @@ int huffTokenizer (char *buff, int buffSize){
     		if(bdata == NULL) {
           //there's no space
     			printf("ERROR: Not enough space on heap\n");
-          //exit our code
-          exit(0);
+          //unsuccessful
+          return 1;
     		}
         //increase the space used by our token
         bSize += 11;
@@ -861,6 +930,7 @@ int huffTokenizer (char *buff, int buffSize){
 int hInsert (char * name, char * bitname) {
   //store the hashcode
 	int sum = 0;
+  //loop counter declaration
   int i;
   //store the newnode
   struct huffNode * newNode;
@@ -880,6 +950,13 @@ int hInsert (char * name, char * bitname) {
 	if(huffmanTable[index] == NULL) {
     //TODO: edit my initial hashtable method to reflect the changes create a new node and put er in there
     newNode = (struct huffNode *)malloc(sizeof(struct huffNode));
+    //memory error
+    if(!newNode){
+      //no space
+      printf("FATAL ERROR: Not enough space on the heap");
+      //return unsuccessful
+      return 1;
+    }
     //populate the node's values
     newNode -> token = name;
     newNode -> bittok = bitname;
@@ -893,14 +970,22 @@ int hInsert (char * name, char * bitname) {
 		temp = huffmanTable[index];
     //make newNode the new head of the linked list at the index
 		newNode = (struct huffNode *)malloc(sizeof(struct huffNode));
+    //memory error
+    if(!newNode){
+      //no space
+      printf("FATAL ERROR: Not enough space on the heap");
+      //return unsuccessful
+      return 1;
+    }
+    //populate
     newNode -> token = name;
     newNode -> bittok = bitname;
 		newNode->next = temp;
     //make newnode the new head
     huffmanTable[index] = newNode;
-    // we finished the insertion
-    return 0;
 	}
+  //success!
+  return 0;
 }
 
 /* Reads the given file and loads it into a local buffer */
@@ -975,7 +1060,7 @@ void buildHuffTree(char * myBook, int buffSize){
   int indicator = 0;
   int localCount = 0;
   //store the escape character
-  escapeChar = myBook[0];
+  //escapeChar = myBook[0];
   //we need to skip to the meat of the notebook 
   while(myBook[t] != '\n'){
     //just keep incrementing i
@@ -1027,7 +1112,7 @@ void buildHuffTree(char * myBook, int buffSize){
         memcpy(token, temp, tokenSize-100);
       }
       //check the escaping character
-      if(myBook[i] == escapeChar){
+      if(myBook[i] == '$'){
         //we have three possibilities for the next character
         if(myBook[i+1] == 'n'){
           //store the newline character in cdata
@@ -1330,6 +1415,7 @@ int siftDown(struct node * parent, int currPos){
 int heapTransfer(){
   //declare counters
   int i;
+  //store the current struct in the hashtable
   struct node *temp;
   //loop through the hash table
   for(i = 0; i < 256; i++){
@@ -1346,8 +1432,8 @@ int heapTransfer(){
       }
     }
   }
-  //return the number of transferrences
-  return i;
+  //return success!
+  return 0;
 }
 
 /*increases the heap array size by 100*/
