@@ -673,9 +673,10 @@ int huffTokenizer (char *buff, int buffSize){
           //skip the next char
           counter++;
         }
+      } else{
+        //continue filling up cdata
+        cdata[localcount] = buff[counter];
       }
-      //continue filling up cdata
-      cdata[localcount] = buff[counter];
     } else if(!indicator){ // we are dealing with the bitcode
     	if(localcount >= bSize) {
     		//temporarily relocate the existing numbers
