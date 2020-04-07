@@ -1,0 +1,10 @@
+﻿1. The first general test we ran was just with simple files in a directory to see if our code could build a Huffman codebook from a single given file.  This was achieved with the build flag (-b).
+2. The next test we decided to run was with the compress flag (-c) with simple files that had a Huffman codebook associated with them.  The compress flag would indicate for our code to produce a .txt.hcz file that was the compressed version of the given text file.
+3. The next test we decided to run was with the decompress flag (-d) with simple .txt.hcz files along with its associated Huffman codebook to produce the original .txt representation of the said compressed file.
+4. The next test conducted was with the recursive flag, -R.  We first did this coupled with -b to recursively go through a directory and all of its subdirectories to create a Huffman codebook.
+5. Next, we coupled the recursive flag, -R, with the -c flag (compression) to go through every .txt file in a given directory and subdirectory and create its compressed .txt.hcz counterpart.  Only .txt files were considered for this operation and all other files were ignored in this process.
+6. Another test case we tried was the recursive flag, -R, with the decompression flag, -d.  In this scenario we went through a given directory and all of its subdirectories to find .txt.hcz files and use the Huffman codebook to turn them into its .txt counterpart.
+7. Some different test cases we tried were different combinations of flags that would not work. This included putting the recursive flag as the second flag or coupling build with compress or decompress and vice versa.  These combinations would result in an error.
+8. Another type of test case was one with empty directories and as a result, nothing was produced.
+9. Another special test case that was accounted for was a file filled with only spaces, tabs, and newline special characters.
+10. A test file that was conducted was a file that contained a single token.
