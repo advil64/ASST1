@@ -9,13 +9,21 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": ["-d", "./testDirectory/test1.txt.hcz", "./HuffmanCodebook"],
+            "args": ["-R","-b","./testDirectory/subDirec1"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
-            "MIMode": "lldb",
-            "preLaunchTask": "gcc build active file"
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "gcc build active file",
+            "miDebuggerPath": "/usr/bin/gdb"
         }
     ]
 }

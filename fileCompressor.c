@@ -309,7 +309,7 @@ int main (int argc, char ** argv){
       //first makesure that you have a codebook argument
       if(i == argc-1){
         //there is no huffman codebook argument
-        printf("ERROR: to use the decompress flag you must provide a huffman codebook\n");
+        printf("ERROR: to use the compress flag you must provide a huffman codebook\n");
         //exit this sucker
         exit(0);
       }
@@ -421,7 +421,7 @@ int compressFiles(int numOfFiles){
   //loop counter
   int i;
   //stores the file extension of the current file (used to skip .hcz files)
-  char fileType[4];
+  char fileType[5];
   //stores the file path of the .hcz file
   char newFilePath[PATH_MAX+1];
   //stores the length of the current file
@@ -438,6 +438,8 @@ int compressFiles(int numOfFiles){
     if(length > 4){
       //extract the file extension from the path
       strncpy(fileType, &files[i][length-4], 4);
+      //null terminate the filetype
+      fileType[4] = '\0';
       //check if the file is an hcz file and skip if it is
       if(strcmp(fileType, ".hcz") == 0){
         //if this is the only file, we want to return an error
@@ -862,7 +864,7 @@ int huffTokenizer (char *buff, int buffSize){
           return 1;
     		}
         //increase the space used by our token
-        cSize += 11;
+        cSize += 10;
         //set the token to null terminators
     		memset(cdata, '\0', cSize);
         //copy the temp stuff back into our cdata
@@ -910,7 +912,7 @@ int huffTokenizer (char *buff, int buffSize){
           return 1;
     		}
         //increase the space used by our token
-        bSize += 11;
+        bSize += 10;
         //set the token to null terminators
     		memset(bdata, '\0', bSize);
         //copy the temp stuff back into our cdata
@@ -1269,7 +1271,7 @@ int readHcz(int readFD, int writeFD){
         //we need to go right
         if(!(curr -> rChild)){
           //there's something wrong
-          printf("Warning: Codebook mismatch");
+          printf("Warning: Codebook mismatch\n");
           exit(1);
         }
         curr = curr -> rChild;
@@ -1277,7 +1279,7 @@ int readHcz(int readFD, int writeFD){
         //we need to go left
         if(!(curr -> lChild)){
           //there's something wrong
-          printf("Warning: Codebook mismatch");
+          printf("Warning: Codebook mismatch\n");
           exit(1);
         }
         curr = curr -> lChild;
@@ -1689,8 +1691,6 @@ int fileReader (int fileDescriptor){
       free(temp);
     }
   }
-  //TODO: delete, this is only for testing purposes
-  //printf("%s", myBuffer);
   //we hand over the contents of our file (stored in buffer) to the table loader function
   tokenizer(myBuffer, buffSize);
   //finish it
@@ -1749,7 +1749,7 @@ int tokenizer (char *buff, int buffSize){
       }
     }
     //store the character in the node array
-    else if(localcount == currSize){
+    else if(localcount >= currSize-1){
       //make the cdata array 10 characters bigger
       currSize += 10;
       //store the old values in the temp pointer
@@ -1779,8 +1779,11 @@ int tokenizer (char *buff, int buffSize){
   }
   //we have reached the end put the last guy in there
   if(buff[counter] == '\0'){
-    //isolate the token and insert it into the table
-    tableInsert(cdata);
+    //check to see if cdata is empty we don't want to unput empty strings
+    if(strcmp(cdata, "") != 0){
+      //isolate the token and insert it into the table
+      tableInsert(cdata);
+    }
   }
   return 0;
 }
