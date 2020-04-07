@@ -383,7 +383,7 @@ int main (int argc, char ** argv){
   //release the files!
   freeFiles(fileCounter);
   clock_t toc = clock();
-  printf("Elapsed: %f seconds\n", (double)(toc - tic) / CLOCKS_PER_SEC);
+  //printf("Elapsed: %f seconds\n", (double)(toc - tic) / CLOCKS_PER_SEC);
   //we're done!
   return 0;
 }
@@ -666,7 +666,7 @@ int compressionWriter(char * token, int fd){
   //check to see if the head node of the given index is Null
   if(huffmanTable[index] == NULL){
     //there is an error
-    printf("ERROR: Codebook mismatch\n");
+    printf("ERROR: Codebook mismatch, your codebook might be empty\n");
     //exit this badboy
     exit(0);
   } else{
@@ -842,7 +842,7 @@ int huffTokenizer (char *buff, int buffSize){
       //we don't need to store empty tokens
      	if(strcmp(bdata, "") == 0){
         //we failed to read the bdata
-        printf("WARNING: Codebook formatted incorrectly\n");
+        printf("WARNING: Codebook formatted incorrectly, compression will not work with only one element in the codebook\n");
         //return unsuccessful
         return 1;
       }
